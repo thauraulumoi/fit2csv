@@ -5,21 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Convert FIT activity files to one AI-ready CSV directly in your browser. Your file never leaves your device."
+      content="Decode FIT files to one complete CSV directly in your browser. Your file never leaves your device."
     />
     <title>FIT → CSV Converter</title>
-    <script type="module" crossorigin src="/assets/index-R57Qbvsv.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-ATTeIiUL.css">
+    <script type="module" crossorigin src="/assets/index-CUqOjksk.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BuQLnAcX.css">
   </head>
   <body>
     <main class="page-shell">
       <section class="hero">
         <div>
-          <span class="eyebrow">LOCAL • PRIVATE • AI-READY</span>
+          <span class="eyebrow">LOCAL • PRIVATE • COMPLETE EXPORT</span>
           <h1>FIT → CSV Converter</h1>
           <p>
-            Convert a <strong>.fit</strong> activity file into one complete CSV for analysis,
-            coaching, Excel, or AI. Your FIT file is processed only in this browser.
+            Decode a <strong>.fit</strong> file and export all fields exposed by the FIT parser into one CSV.
+            No coaching metrics or derived activity data are added to the downloaded file.
           </p>
         </div>
         <div class="privacy-pill">🔒 Local processing</div>
@@ -48,15 +48,19 @@
       </section>
 
       <section id="summarySection" class="hidden">
-        <div class="section-heading">
-          <div>
-            <span class="eyebrow">ACTIVITY SUMMARY</span>
-            <h2>Overview</h2>
+        <div class="card activity-card">
+          <div class="activity-card-header">
+            <div class="activity-title-wrap">
+              <span class="activity-icon">⌁</span>
+              <h2>ACTIVITY SUMMARY</h2>
+            </div>
+            <div id="sportBadge" class="sport-badge"></div>
           </div>
-          <div id="sportBadge" class="sport-badge"></div>
-        </div>
 
-        <div id="summaryGrid" class="summary-grid"></div>
+          <div id="deviceGrid" class="device-grid"></div>
+          <div class="summary-divider"></div>
+          <div id="summaryGrid" class="summary-grid"></div>
+        </div>
 
         <div class="card table-card">
           <div class="table-header">
@@ -86,15 +90,15 @@
 
         <div class="download-panel card">
           <div>
-            <h3>AI-ready full activity CSV</h3>
+            <h3>Complete decoded FIT CSV</h3>
             <p>
-              One file containing the activity summary, all splits, and every timestamped record
-              including pace, heart rate, cadence, stride length, power, altitude, and GPS when available.
+              One CSV containing every decoded FIT message and every field exposed by the parser.
+              Original parser field names and decoded values are retained; no derived training metrics are added.
             </p>
           </div>
           <button id="downloadFullBtn" class="primary-btn download-full-btn" type="button">
             <span>Download Full CSV</span>
-            <small>Summary + splits + full record-level data</small>
+            <small>All decoded FIT messages and fields</small>
           </button>
         </div>
       </section>
