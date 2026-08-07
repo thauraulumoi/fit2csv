@@ -15,16 +15,57 @@ const els = {
   summaryGrid: $('summaryGrid'),
   sportBadge: $('sportBadge'),
   lapsBody: $('lapsBody'),
-  downloadRecordsBtn: $('downloadRecordsBtn'),
-  downloadLapsBtn: $('downloadLapsBtn'),
-  downloadAllBtn: $('downloadAllBtn'),
+  downloadFullBtn: $('downloadFullBtn'),
 };
 
 let currentFile = null;
 let parsedData = null;
 let normalized = null;
 
-const RECORD_COLUMNS = [
+// One flat schema for AI-friendly analysis. Rows are identified by row_type:
+// summary -> split -> record.
+const FULL_CSV_COLUMNS = [
+  'row_type',
+  'source_file',
+  'sport',
+  'activity_start_time',
+
+  // Activity summary fields
+  'total_distance_km',
+  'total_timer_time_s',
+  'total_elapsed_time_s',
+  'avg_pace_min_km',
+  'avg_speed_kmh',
+  'avg_heart_rate_bpm',
+  'max_heart_rate_bpm',
+  'avg_cadence_rpm',
+  'max_cadence_rpm',
+  'avg_power_w',
+  'max_power_w',
+  'total_ascent_m',
+  'total_descent_m',
+  'calories',
+
+  // Split / lap fields
+  'split',
+  'split_start_time',
+  'split_distance_km',
+  'split_timer_time_s',
+  'split_elapsed_time_s',
+  'split_avg_pace_min_km',
+  'split_avg_speed_kmh',
+  'split_avg_heart_rate_bpm',
+  'split_max_heart_rate_bpm',
+  'split_avg_cadence_rpm',
+  'split_max_cadence_rpm',
+  'split_avg_power_w',
+  'split_max_power_w',
+  'split_total_ascent_m',
+  'split_total_descent_m',
+  'split_calories',
+
+  // Timestamped record fields
+  'record_index',
   'timestamp',
   'elapsed_time_s',
   'timer_time_s',
@@ -40,22 +81,6 @@ const RECORD_COLUMNS = [
   'power_w',
   'position_lat_deg',
   'position_long_deg',
-];
-
-const LAP_COLUMNS = [
-  'lap',
-  'start_time',
-  'total_distance_km',
-  'total_timer_time_s',
-  'avg_pace_min_km',
-  'avg_speed_kmh',
-  'avg_heart_rate_bpm',
-  'max_heart_rate_bpm',
-  'avg_cadence_rpm',
-  'max_cadence_rpm',
-  'total_ascent_m',
-  'total_descent_m',
-  'calories',
 ];
 
 els.dropZone.addEventListener('click', () => els.fileInput.click());
@@ -86,33 +111,24 @@ els.dropZone.addEventListener('drop', (event) => {
   if (file) handleFile(file);
 });
 
-els.downloadRecordsBtn.addEventListener('click', () => {
-  if (!normalized) return;
-  downloadCsv(`${baseName(currentFile.name)}_records.csv`, normalized.records, RECORD_COLUMNS);
-});
-
-els.downloadLapsBtn.addEventListener('click', () => {
-  if (!normalized) return;
-  downloadCsv(`${baseName(currentFile.name)}_laps.csv`, normalized.laps, LAP_COLUMNS);
-});
-
-els.downloadAllBtn.addEventListener('click', () => {
-  if (!normalized) return;
-  downloadCsv(`${baseName(currentFile.name)}_activity.csv`, normalized.activityRows, normalized.activityColumns);
+els.downloadFullBtn.addEventListener('click', () => {
+  if (!normalized || !currentFile) return;
+  const filename = `${baseName(currentFile.name)}_full.csv`;
+  downloadCsv(filename, normalized.fullCsvRows, FULL_CSV_COLUMNS);
 });
 
 async function handleFile(file) {
   if (!file.name.toLowerCase().endsWith('.fit')) {
-    showStatus('error', 'File không hợp lệ. Hãy chọn file có đuôi .fit.');
+    showStatus('error', 'Invalid file. Please select a file with the .fit extension.');
     return;
   }
 
   currentFile = file;
   els.fileName.textContent = file.name;
-  els.fileMeta.textContent = `${formatBytes(file.size)} • xử lý ngay trên thiết bị này`;
+  els.fileMeta.textContent = `${formatBytes(file.size)} • processed locally on this device`;
   els.fileRow.classList.remove('hidden');
   els.summarySection.classList.add('hidden');
-  showStatus('loading', 'Đang đọc và phân tích FIT...');
+  showStatus('loading', 'Reading and parsing FIT data...');
 
   try {
     const buffer = await file.arrayBuffer();
@@ -126,33 +142,38 @@ async function handleFile(file) {
     });
 
     parsedData = await parser.parseAsync(buffer);
-    normalized = normalizeFit(parsedData);
+    normalized = normalizeFit(parsedData, file.name);
 
     if (!normalized.records.length && !normalized.laps.length) {
-      throw new Error('Không tìm thấy record hoặc lap trong file FIT.');
+      throw new Error('No activity records or splits were found in this FIT file.');
     }
 
     render(normalized);
-    showStatus('success', `Đã đọc xong: ${normalized.records.length.toLocaleString('vi-VN')} records, ${normalized.laps.length} laps.`);
+    showStatus(
+      'success',
+      `Ready: ${normalized.records.length.toLocaleString('en-US')} records and ${normalized.laps.length.toLocaleString('en-US')} splits.`
+    );
   } catch (error) {
     console.error(error);
     parsedData = null;
     normalized = null;
     els.summarySection.classList.add('hidden');
-    showStatus('error', `Không thể đọc file FIT: ${String(error?.message ?? error)}`);
+    showStatus('error', `Unable to read this FIT file: ${String(error?.message ?? error)}`);
   }
 }
 
-function normalizeFit(data) {
+function normalizeFit(data, sourceFile) {
   const recordsRaw = Array.isArray(data?.records) ? data.records : [];
   const lapsRaw = Array.isArray(data?.laps) ? data.laps : [];
   const sessions = Array.isArray(data?.sessions) ? data.sessions : [];
   const session = sessions[0] ?? {};
 
-  const records = recordsRaw.map((r) => {
+  const records = recordsRaw.map((r, index) => {
     const speed = num(firstDefined(r.enhanced_speed, r.speed));
     const distance = num(r.distance);
+
     return {
+      record_index: index + 1,
       timestamp: iso(r.timestamp),
       elapsed_time_s: num(r.elapsed_time),
       timer_time_s: num(r.timer_time),
@@ -174,62 +195,110 @@ function normalizeFit(data) {
   const laps = lapsRaw.map((lap, index) => {
     const distance = num(lap.total_distance);
     const timer = num(firstDefined(lap.total_timer_time, lap.total_elapsed_time));
+    const elapsed = num(firstDefined(lap.total_elapsed_time, lap.total_timer_time));
     const avgSpeed = num(firstDefined(lap.enhanced_avg_speed, lap.avg_speed));
+
     return {
-      lap: index + 1,
-      start_time: iso(lap.start_time),
-      total_distance_km: distance,
-      total_timer_time_s: timer,
-      avg_pace_min_km: paceFromDistanceTime(distance, timer, avgSpeed),
-      avg_speed_kmh: avgSpeed,
-      avg_heart_rate_bpm: num(lap.avg_heart_rate),
-      max_heart_rate_bpm: num(lap.max_heart_rate),
-      avg_cadence_rpm: num(lap.avg_cadence),
-      max_cadence_rpm: num(lap.max_cadence),
-      total_ascent_m: num(lap.total_ascent),
-      total_descent_m: num(lap.total_descent),
-      calories: num(lap.total_calories),
+      split: index + 1,
+      split_start_time: iso(lap.start_time),
+      split_distance_km: distance,
+      split_timer_time_s: timer,
+      split_elapsed_time_s: elapsed,
+      split_avg_pace_min_km: paceFromDistanceTime(distance, timer, avgSpeed),
+      split_avg_speed_kmh: avgSpeed,
+      split_avg_heart_rate_bpm: num(lap.avg_heart_rate),
+      split_max_heart_rate_bpm: num(lap.max_heart_rate),
+      split_avg_cadence_rpm: num(lap.avg_cadence),
+      split_max_cadence_rpm: num(lap.max_cadence),
+      split_avg_power_w: num(lap.avg_power),
+      split_max_power_w: num(lap.max_power),
+      split_total_ascent_m: num(lap.total_ascent),
+      split_total_descent_m: num(lap.total_descent),
+      split_calories: num(lap.total_calories),
     };
   });
 
   const lastRecordDistance = records.length ? records[records.length - 1].distance_km : null;
-  const totalDistance = num(firstDefined(session.total_distance, lastRecordDistance, sum(laps.map((x) => x.total_distance_km))));
-  const totalTimer = num(firstDefined(session.total_timer_time, session.total_elapsed_time, max(records.map((x) => x.timer_time_s)), sum(laps.map((x) => x.total_timer_time_s))));
+  const totalDistance = num(firstDefined(
+    session.total_distance,
+    lastRecordDistance,
+    sum(laps.map((x) => x.split_distance_km))
+  ));
+  const totalTimer = num(firstDefined(
+    session.total_timer_time,
+    max(records.map((x) => x.timer_time_s)),
+    sum(laps.map((x) => x.split_timer_time_s))
+  ));
+  const totalElapsed = num(firstDefined(
+    session.total_elapsed_time,
+    max(records.map((x) => x.elapsed_time_s)),
+    sum(laps.map((x) => x.split_elapsed_time_s))
+  ));
   const avgSpeed = num(firstDefined(session.enhanced_avg_speed, session.avg_speed));
   const avgHr = num(firstDefined(session.avg_heart_rate, average(records.map((x) => x.heart_rate_bpm))));
   const maxHr = num(firstDefined(session.max_heart_rate, max(records.map((x) => x.heart_rate_bpm))));
   const avgCadence = num(firstDefined(session.avg_cadence, average(records.map((x) => x.cadence_rpm))));
-  const ascent = num(firstDefined(session.total_ascent, sum(laps.map((x) => x.total_ascent_m))));
-  const calories = num(firstDefined(session.total_calories, sum(laps.map((x) => x.calories))));
+  const maxCadence = num(firstDefined(session.max_cadence, max(records.map((x) => x.cadence_rpm))));
+  const avgPower = num(firstDefined(session.avg_power, average(records.map((x) => x.power_w))));
+  const maxPower = num(firstDefined(session.max_power, max(records.map((x) => x.power_w))));
+  const ascent = num(firstDefined(session.total_ascent, sum(laps.map((x) => x.split_total_ascent_m))));
+  const descent = num(firstDefined(session.total_descent, sum(laps.map((x) => x.split_total_descent_m))));
+  const calories = num(firstDefined(session.total_calories, sum(laps.map((x) => x.split_calories))));
   const sport = String(firstDefined(session.sport, data?.sport, 'activity'));
+  const activityStartTime = iso(firstDefined(
+    session.start_time,
+    laps[0]?.split_start_time,
+    records[0]?.timestamp
+  ));
 
   const summary = {
+    source_file: sourceFile,
     sport,
+    activity_start_time: activityStartTime,
     total_distance_km: totalDistance,
     total_timer_time_s: totalTimer,
+    total_elapsed_time_s: totalElapsed,
     avg_pace_min_km: paceFromDistanceTime(totalDistance, totalTimer, avgSpeed),
+    avg_speed_kmh: avgSpeed,
     avg_heart_rate_bpm: avgHr,
     max_heart_rate_bpm: maxHr,
     avg_cadence_rpm: avgCadence,
+    max_cadence_rpm: maxCadence,
+    avg_power_w: avgPower,
+    max_power_w: maxPower,
     total_ascent_m: ascent,
+    total_descent_m: descent,
     calories,
   };
 
-  const activityColumns = ['section', 'metric', 'value', 'unit'];
-  const activityRows = [
-    { section: 'summary', metric: 'sport', value: summary.sport, unit: '' },
-    { section: 'summary', metric: 'distance', value: summary.total_distance_km, unit: 'km' },
-    { section: 'summary', metric: 'time', value: summary.total_timer_time_s, unit: 's' },
-    { section: 'summary', metric: 'avg_pace', value: summary.avg_pace_min_km, unit: 'min/km' },
-    { section: 'summary', metric: 'avg_hr', value: summary.avg_heart_rate_bpm, unit: 'bpm' },
-    { section: 'summary', metric: 'max_hr', value: summary.max_heart_rate_bpm, unit: 'bpm' },
-    { section: 'summary', metric: 'avg_cadence', value: summary.avg_cadence_rpm, unit: 'rpm' },
-    { section: 'summary', metric: 'elevation_gain', value: summary.total_ascent_m, unit: 'm' },
-    { section: 'summary', metric: 'calories', value: summary.calories, unit: 'kcal' },
-    ...laps.map((lap) => ({ section: `lap_${lap.lap}`, metric: 'json', value: JSON.stringify(lap), unit: '' })),
-  ];
+  const context = {
+    source_file: summary.source_file,
+    sport: summary.sport,
+    activity_start_time: summary.activity_start_time,
+  };
 
-  return { summary, records, laps, activityRows, activityColumns };
+  const summaryRow = {
+    row_type: 'summary',
+    ...context,
+    ...summary,
+  };
+
+  const splitRows = laps.map((lap) => ({
+    row_type: 'split',
+    ...context,
+    ...lap,
+  }));
+
+  const recordRows = records.map((record) => ({
+    row_type: 'record',
+    ...context,
+    ...record,
+  }));
+
+  // A single CSV: first the overall context, then splits, then second-by-second records.
+  const fullCsvRows = [summaryRow, ...splitRows, ...recordRows];
+
+  return { summary, records, laps, fullCsvRows };
 }
 
 function render(data) {
@@ -239,11 +308,11 @@ function render(data) {
   const cards = [
     ['Distance', formatNumber(s.total_distance_km, 2), 'km'],
     ['Time', formatDuration(s.total_timer_time_s), ''],
-    ['Avg Pace', formatPace(s.avg_pace_min_km), '/km'],
-    ['Avg HR', formatNumber(s.avg_heart_rate_bpm, 0), 'bpm'],
+    ['Average Pace', formatPace(s.avg_pace_min_km), '/km'],
+    ['Average HR', formatNumber(s.avg_heart_rate_bpm, 0), 'bpm'],
     ['Max HR', formatNumber(s.max_heart_rate_bpm, 0), 'bpm'],
-    ['Cadence', formatNumber(s.avg_cadence_rpm, 0), 'rpm'],
-    ['Elevation +', formatNumber(s.total_ascent_m, 0), 'm'],
+    ['Avg Cadence', formatNumber(s.avg_cadence_rpm, 0), 'rpm'],
+    ['Elevation Gain', formatNumber(s.total_ascent_m, 0), 'm'],
     ['Calories', formatNumber(s.calories, 0), 'kcal'],
   ];
 
@@ -257,21 +326,20 @@ function render(data) {
   if (data.laps.length) {
     els.lapsBody.innerHTML = data.laps.map((lap) => `
       <tr>
-        <td>${lap.lap}</td>
-        <td>${formatNumber(lap.total_distance_km, 2)} km</td>
-        <td>${formatDuration(lap.total_timer_time_s)}</td>
-        <td>${formatPace(lap.avg_pace_min_km)}</td>
-        <td>${formatNumber(lap.avg_heart_rate_bpm, 0)}</td>
-        <td>${formatNumber(lap.max_heart_rate_bpm, 0)}</td>
-        <td>${formatNumber(lap.avg_cadence_rpm, 0)}</td>
-        <td>${formatNumber(lap.total_ascent_m, 0)} m</td>
+        <td>${lap.split}</td>
+        <td>${formatNumber(lap.split_distance_km, 2)} km</td>
+        <td>${formatDuration(lap.split_timer_time_s)}</td>
+        <td>${formatPace(lap.split_avg_pace_min_km)}</td>
+        <td>${formatNumber(lap.split_avg_heart_rate_bpm, 0)}</td>
+        <td>${formatNumber(lap.split_max_heart_rate_bpm, 0)}</td>
+        <td>${formatNumber(lap.split_avg_cadence_rpm, 0)}</td>
+        <td>${formatNumber(lap.split_total_ascent_m, 0)} m</td>
       </tr>
     `).join('');
   } else {
-    els.lapsBody.innerHTML = '<tr><td colspan="8" class="empty-cell">File FIT này không chứa lap.</td></tr>';
+    els.lapsBody.innerHTML = '<tr><td colspan="8" class="empty-cell">No split data found in this FIT file.</td></tr>';
   }
 
-  els.downloadLapsBtn.disabled = !data.laps.length;
   els.summarySection.classList.remove('hidden');
 }
 
@@ -328,7 +396,7 @@ function num(value) {
 function normalizeStrideLength(value) {
   const n = num(value);
   if (n === null) return null;
-  // Some FIT devices expose step_length in mm; values > 10 are almost certainly millimetres.
+  // Some FIT devices expose step_length in millimetres; values > 10 are almost certainly mm.
   return n > 10 ? n / 1000 : n;
 }
 
@@ -397,7 +465,12 @@ function formatDuration(seconds) {
 
 function formatNumber(value, decimals = 0) {
   const n = num(value);
-  return n === null ? '—' : n.toLocaleString('vi-VN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  return n === null
+    ? '—'
+    : n.toLocaleString('en-US', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      });
 }
 
 function formatBytes(bytes) {

@@ -1,28 +1,41 @@
 # FIT → CSV Converter
 
-Trang web chuyển file `.fit` sang CSV hoàn toàn trên trình duyệt. File FIT không được upload lên backend.
+A privacy-first web app that converts a `.fit` activity file into one complete, AI-ready CSV directly in the browser. The FIT file is never uploaded to a backend.
 
-## Chức năng
+## Features
 
-- Drag & drop hoặc chọn file `.fit`
-- Parse FIT bằng `fit-file-parser`
-- Hiển thị summary: distance, time, pace, HR, cadence, elevation, calories
-- Hiển thị laps/splits
-- Xuất `*_records.csv`
-- Xuất `*_laps.csv`
-- Xuất `*_activity.csv`
-- Chạy static trên Cloudflare Workers Static Assets
+- Drag & drop or browse for a `.fit` file
+- Parse FIT data with `fit-file-parser`
+- Display activity summary: distance, time, average pace, heart rate, cadence, elevation gain, and calories
+- Display FIT laps / splits
+- Export **one** `*_full.csv` file containing:
+  - one `summary` row with overall activity metrics
+  - all `split` rows
+  - all timestamped `record` rows
+- Record-level fields include distance, speed, pace, heart rate, cadence, stride length, altitude, temperature, power, and GPS when present in the FIT file
+- Designed so an AI coach can analyze a single CSV without merging multiple files
+- Runs as static assets on Cloudflare Workers
 
-## Chạy local
+## Full CSV structure
 
-Yêu cầu Node.js 20+.
+The first column is `row_type`:
+
+- `summary`: overall activity context
+- `split`: one row per FIT lap / split
+- `record`: timestamped activity samples
+
+All three row types share one CSV header. Fields that do not apply to a row are left blank.
+
+## Run locally
+
+Requires Node.js 20+.
 
 ```bash
 npm install
 npm run dev
 ```
 
-Vite sẽ hiện URL local, thường là `http://localhost:5173`.
+Vite will print the local URL, usually `http://localhost:5173`.
 
 ## Build
 
@@ -30,11 +43,11 @@ Vite sẽ hiện URL local, thường là `http://localhost:5173`.
 npm run build
 ```
 
-Output nằm trong thư mục `dist/`.
+The output is written to `dist/`.
 
-## Deploy Cloudflare Workers
+## Deploy to Cloudflare Workers
 
-Đăng nhập Cloudflare lần đầu:
+Login once:
 
 ```bash
 npx wrangler login
@@ -46,18 +59,8 @@ Deploy:
 npm run deploy
 ```
 
-Wrangler sẽ build rồi upload thư mục `dist/` theo `wrangler.jsonc`.
-
-## Custom domain
-
-Sau khi deploy:
-
-1. Cloudflare Dashboard
-2. Workers & Pages
-3. Chọn worker `fit-csv-converter`
-4. Settings / Domains & Routes
-5. Add Custom Domain
+Wrangler builds the app and uploads the `dist/` directory configured in `wrangler.jsonc`.
 
 ## Privacy
 
-App dùng `File.arrayBuffer()` và parse trực tiếp trong browser. Không có endpoint upload file và không có database.
+The app reads the FIT file with `File.arrayBuffer()` and parses it locally in the browser. There is no upload endpoint and no database.

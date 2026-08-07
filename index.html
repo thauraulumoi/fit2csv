@@ -1,29 +1,37 @@
 <!doctype html>
-<html lang="vi">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Chuyển file FIT thành CSV ngay trên trình duyệt. File không được upload lên server." />
+    <meta
+      name="description"
+      content="Convert FIT activity files to one AI-ready CSV directly in your browser. Your file never leaves your device."
+    />
     <title>FIT → CSV Converter</title>
   </head>
   <body>
     <main class="page-shell">
       <section class="hero">
         <div>
-          <span class="eyebrow">LOCAL • PRIVATE • FAST</span>
+          <span class="eyebrow">LOCAL • PRIVATE • AI-READY</span>
           <h1>FIT → CSV Converter</h1>
-          <p>Chuyển file hoạt động <strong>.fit</strong> sang CSV ngay trên trình duyệt. File của bạn không được upload lên server.</p>
+          <p>
+            Convert a <strong>.fit</strong> activity file into one complete CSV for analysis,
+            coaching, Excel, or AI. Your FIT file is processed only in this browser.
+          </p>
         </div>
-        <div class="privacy-pill">🔒 Xử lý cục bộ</div>
+        <div class="privacy-pill">🔒 Local processing</div>
       </section>
 
       <section class="card uploader-card">
         <input id="fileInput" type="file" accept=".fit,application/octet-stream" hidden />
         <button id="dropZone" class="drop-zone" type="button">
           <div class="drop-icon">⇧</div>
-          <div class="drop-title">Thả file .FIT vào đây</div>
-          <div class="drop-subtitle">hoặc bấm để chọn file</div>
-          <div class="drop-hint">Garmin • COROS • Polar • Suunto và FIT-compatible devices</div>
+          <div class="drop-copy">
+            <div class="drop-title">Drop a .FIT file here</div>
+            <div class="drop-subtitle">or click to browse</div>
+          </div>
+          <div class="drop-hint">Garmin • COROS • Polar • Suunto • FIT-compatible devices</div>
         </button>
 
         <div id="fileRow" class="file-row hidden">
@@ -31,7 +39,7 @@
             <div id="fileName" class="file-name"></div>
             <div id="fileMeta" class="muted"></div>
           </div>
-          <button id="clearBtn" class="text-btn" type="button">Chọn file khác</button>
+          <button id="clearBtn" class="text-btn" type="button">Choose another file</button>
         </div>
 
         <div id="status" class="status hidden"></div>
@@ -41,7 +49,7 @@
         <div class="section-heading">
           <div>
             <span class="eyebrow">ACTIVITY SUMMARY</span>
-            <h2>Tổng quan</h2>
+            <h2>Overview</h2>
           </div>
           <div id="sportBadge" class="sport-badge"></div>
         </div>
@@ -51,16 +59,15 @@
         <div class="card table-card">
           <div class="table-header">
             <div>
-              <h3>Laps / Splits</h3>
-              <p class="muted">Dữ liệu lap có sẵn trong file FIT.</p>
+              <h3>Splits</h3>
+              <p class="muted">Lap / split data stored in the FIT file.</p>
             </div>
-            <button id="downloadLapsBtn" class="secondary-btn" type="button">Download laps.csv</button>
           </div>
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Lap</th>
+                  <th>Split</th>
                   <th>Distance</th>
                   <th>Time</th>
                   <th>Avg Pace</th>
@@ -75,21 +82,24 @@
           </div>
         </div>
 
-        <div class="download-grid">
-          <button id="downloadRecordsBtn" class="primary-btn" type="button">
-            <span>Download records.csv</span>
-            <small>Dữ liệu từng record / timestamp</small>
-          </button>
-          <button id="downloadAllBtn" class="secondary-btn tall" type="button">
-            <span>Download activity.csv</span>
-            <small>Bản CSV tổng hợp dễ dùng Excel</small>
+        <div class="download-panel card">
+          <div>
+            <h3>AI-ready full activity CSV</h3>
+            <p>
+              One file containing the activity summary, all splits, and every timestamped record
+              including pace, heart rate, cadence, stride length, power, altitude, and GPS when available.
+            </p>
+          </div>
+          <button id="downloadFullBtn" class="primary-btn download-full-btn" type="button">
+            <span>Download Full CSV</span>
+            <small>Summary + splits + full record-level data</small>
           </button>
         </div>
       </section>
 
       <footer>
         <span>FIT → CSV Converter</span>
-        <span>Không lưu trữ file • Không gửi dữ liệu lên server</span>
+        <span>No uploads • No server storage • Runs locally in your browser</span>
       </footer>
     </main>
 
