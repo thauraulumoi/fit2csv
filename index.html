@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Chuyển file FIT thành CSV ngay trên trình duyệt. File không được upload lên server." />
+    <title>FIT → CSV Converter</title>
+  </head>
+  <body>
+    <main class="page-shell">
+      <section class="hero">
+        <div>
+          <span class="eyebrow">LOCAL • PRIVATE • FAST</span>
+          <h1>FIT → CSV Converter</h1>
+          <p>Chuyển file hoạt động <strong>.fit</strong> sang CSV ngay trên trình duyệt. File của bạn không được upload lên server.</p>
+        </div>
+        <div class="privacy-pill">🔒 Xử lý cục bộ</div>
+      </section>
+
+      <section class="card uploader-card">
+        <input id="fileInput" type="file" accept=".fit,application/octet-stream" hidden />
+        <button id="dropZone" class="drop-zone" type="button">
+          <div class="drop-icon">⇧</div>
+          <div class="drop-title">Thả file .FIT vào đây</div>
+          <div class="drop-subtitle">hoặc bấm để chọn file</div>
+          <div class="drop-hint">Garmin • COROS • Polar • Suunto và FIT-compatible devices</div>
+        </button>
+
+        <div id="fileRow" class="file-row hidden">
+          <div>
+            <div id="fileName" class="file-name"></div>
+            <div id="fileMeta" class="muted"></div>
+          </div>
+          <button id="clearBtn" class="text-btn" type="button">Chọn file khác</button>
+        </div>
+
+        <div id="status" class="status hidden"></div>
+      </section>
+
+      <section id="summarySection" class="hidden">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">ACTIVITY SUMMARY</span>
+            <h2>Tổng quan</h2>
+          </div>
+          <div id="sportBadge" class="sport-badge"></div>
+        </div>
+
+        <div id="summaryGrid" class="summary-grid"></div>
+
+        <div class="card table-card">
+          <div class="table-header">
+            <div>
+              <h3>Laps / Splits</h3>
+              <p class="muted">Dữ liệu lap có sẵn trong file FIT.</p>
+            </div>
+            <button id="downloadLapsBtn" class="secondary-btn" type="button">Download laps.csv</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Lap</th>
+                  <th>Distance</th>
+                  <th>Time</th>
+                  <th>Avg Pace</th>
+                  <th>Avg HR</th>
+                  <th>Max HR</th>
+                  <th>Cadence</th>
+                  <th>Elev +</th>
+                </tr>
+              </thead>
+              <tbody id="lapsBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="download-grid">
+          <button id="downloadRecordsBtn" class="primary-btn" type="button">
+            <span>Download records.csv</span>
+            <small>Dữ liệu từng record / timestamp</small>
+          </button>
+          <button id="downloadAllBtn" class="secondary-btn tall" type="button">
+            <span>Download activity.csv</span>
+            <small>Bản CSV tổng hợp dễ dùng Excel</small>
+          </button>
+        </div>
+      </section>
+
+      <footer>
+        <span>FIT → CSV Converter</span>
+        <span>Không lưu trữ file • Không gửi dữ liệu lên server</span>
+      </footer>
+    </main>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
