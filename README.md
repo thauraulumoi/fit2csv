@@ -101,3 +101,18 @@ It does not:
 - Use a database
 
 Cloudflare Workers is used only to serve the static application.
+
+## SEO configuration for fit2csv.click
+
+This build includes production SEO settings for `https://fit2csv.click/`:
+
+- Canonical URL
+- Search title and meta description
+- Open Graph and Twitter metadata
+- `WebSite` and `SoftwareApplication` JSON-LD structured data
+- Search-friendly visible content and FAQ
+- `public/robots.txt`
+- `public/sitemap.xml`
+- `public/favicon.svg`
+
+After deployment, verify the domain in Google Search Console, submit `https://fit2csv.click/sitemap.xml`, inspect `https://fit2csv.click/`, and request indexing.
