@@ -1,4 +1,4 @@
-# FIT → CSV Converter
+# FIT2CSV — FIT to CSV Converter
 
 A browser-only FIT file decoder that exports all data exposed by `fit-file-parser` into one CSV file.
 
@@ -84,7 +84,7 @@ Wrangler builds the project and deploys the `dist/` directory according to `wran
 
 1. Open Cloudflare Dashboard.
 2. Go to **Workers & Pages**.
-3. Select `fit-csv-converter`.
+3. Select `fit2csv`.
 4. Open **Settings → Domains & Routes**.
 5. Select **Add Custom Domain**.
 6. Enter the desired domain or subdomain.
@@ -116,3 +116,12 @@ This build includes production SEO settings for `https://fit2csv.click/`:
 - `public/favicon.svg`
 
 After deployment, verify the domain in Google Search Console, submit `https://fit2csv.click/sitemap.xml`, inspect `https://fit2csv.click/`, and request indexing.
+
+
+## SEO Landing Pages
+
+- `https://fit2csv.click/garmin-fit-to-csv/`
+- `https://fit2csv.click/coros-fit-to-csv/`
+- `https://fit2csv.click/fit-to-csv-for-ai/`
+
+All three pages use unique metadata, canonical URLs, visible content, internal links, and are included in `public/sitemap.xml`.
