@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://fit2csv.click/sitemap.xml
+Sitemap: https://fit2csv.click/sitemap.txt

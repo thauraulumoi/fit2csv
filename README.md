@@ -112,10 +112,10 @@ This build includes production SEO settings for `https://fit2csv.click/`:
 - `WebSite` and `SoftwareApplication` JSON-LD structured data
 - Search-friendly visible content and FAQ
 - `public/robots.txt`
-- `public/sitemap.xml`
+- `public/sitemap.txt`
 - `public/favicon.svg`
 
-After deployment, verify the domain in Google Search Console, submit `https://fit2csv.click/sitemap.xml`, inspect `https://fit2csv.click/`, and request indexing.
+After deployment, verify the domain in Google Search Console, submit `https://fit2csv.click/sitemap.txt`, inspect `https://fit2csv.click/`, and request indexing.
 
 
 ## SEO Landing Pages
@@ -124,4 +124,4 @@ After deployment, verify the domain in Google Search Console, submit `https://fi
 - `https://fit2csv.click/coros-fit-to-csv/`
 - `https://fit2csv.click/fit-to-csv-for-ai/`
 
-All three pages use unique metadata, canonical URLs, visible content, internal links, and are included in `public/sitemap.xml`.
+All three pages use unique metadata, canonical URLs, visible content, internal links, and are included in `public/sitemap.txt`.
