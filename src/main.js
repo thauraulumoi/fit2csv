@@ -18,6 +18,7 @@ const els = {
   lapsBody: $('lapsBody'),
   downloadFullBtn: $('downloadFullBtn'),
   analyzeAiBtn: $('analyzeAiBtn'),
+  aiLanguage: $('aiLanguage'),
   aiStatus: $('aiStatus'),
   aiResult: $('aiResult'),
 };
@@ -301,10 +302,14 @@ function renderPreview(data) {
 async function analyzeWithAi() {
   if (!parsedData) return;
 
+  const language = resolveAnalysisLanguage(els.aiLanguage?.value || 'auto');
   const payload = buildAiAnalysisPayload(parsedData);
+  payload.analysis_language = language;
+
   els.analyzeAiBtn.disabled = true;
+  if (els.aiLanguage) els.aiLanguage.disabled = true;
   els.aiResult.classList.add('hidden');
-  showAiStatus('loading', 'Analyzing compact workout metrics with Cloudflare Workers AI...');
+  showAiStatus('loading', 'Analyzing compact workout metrics with AI...');
 
   try {
     const response = await fetch('/api/analyze', {
@@ -320,14 +325,155 @@ async function analyzeWithAi() {
       throw new Error(body?.error || `AI request failed (${response.status}).`);
     }
 
-    renderAiResult(body.analysis);
-    showAiStatus('success', 'AI analysis ready.');
+    renderAiResult(body.analysis, language);
+    showAiStatus('success', getAiUiText(language).ready);
   } catch (error) {
     console.error(error);
     showAiStatus('error', String(error?.message || error));
   } finally {
     els.analyzeAiBtn.disabled = false;
+    if (els.aiLanguage) els.aiLanguage.disabled = false;
   }
+}
+
+
+const SUPPORTED_ANALYSIS_LANGUAGES = new Set(['en', 'vi', 'es', 'de', 'fr', 'ja', 'ko', 'zh']);
+
+function resolveAnalysisLanguage(selected) {
+  if (selected && selected !== 'auto' && SUPPORTED_ANALYSIS_LANGUAGES.has(selected)) {
+    return selected;
+  }
+
+  const browserLanguage = String(navigator.language || navigator.languages?.[0] || 'en').toLowerCase();
+  const primary = browserLanguage.split('-')[0];
+  if (primary === 'zh') return 'zh';
+  return SUPPORTED_ANALYSIS_LANGUAGES.has(primary) ? primary : 'en';
+}
+
+function getAiUiText(language) {
+  const labels = {
+    en: {
+      kicker: 'WORKOUT ANALYSIS',
+      fallbackHeadline: 'Activity analysis',
+      pacing: 'Pacing & Effort',
+      heartRate: 'Heart Rate',
+      runningForm: 'Running Form',
+      nextSession: 'Next Session',
+      positives: 'What went well',
+      cautions: 'Watch-outs',
+      dataNotes: 'Data notes',
+      noData: 'Not enough data to assess.',
+      noItem: 'No specific item identified from the available data.',
+      disclaimer: 'AI-generated workout analysis is informational and is not medical advice. FIT2CSV does not retain the original FIT file for this analysis.',
+      ready: 'AI analysis ready.'
+    },
+    vi: {
+      kicker: 'PHÂN TÍCH BUỔI TẬP',
+      fallbackHeadline: 'Phân tích hoạt động',
+      pacing: 'Pace & Cường độ',
+      heartRate: 'Nhịp tim',
+      runningForm: 'Kỹ thuật chạy',
+      nextSession: 'Buổi tập tiếp theo',
+      positives: 'Điểm làm tốt',
+      cautions: 'Điểm cần lưu ý',
+      dataNotes: 'Ghi chú dữ liệu',
+      noData: 'Không đủ dữ liệu để đánh giá.',
+      noItem: 'Không xác định được điểm cụ thể từ dữ liệu hiện có.',
+      disclaimer: 'Phân tích do AI tạo chỉ mang tính tham khảo và không phải tư vấn y tế. FIT2CSV không lưu file FIT gốc cho lần phân tích này.',
+      ready: 'Phân tích AI đã sẵn sàng.'
+    },
+    es: {
+      kicker: 'ANÁLISIS DEL ENTRENAMIENTO',
+      fallbackHeadline: 'Análisis de la actividad',
+      pacing: 'Ritmo y esfuerzo',
+      heartRate: 'Frecuencia cardíaca',
+      runningForm: 'Técnica de carrera',
+      nextSession: 'Próxima sesión',
+      positives: 'Lo que salió bien',
+      cautions: 'Aspectos a vigilar',
+      dataNotes: 'Notas de datos',
+      noData: 'No hay suficientes datos para evaluar.',
+      noItem: 'No se identificó ningún punto específico con los datos disponibles.',
+      disclaimer: 'El análisis generado por IA es informativo y no constituye consejo médico. FIT2CSV no conserva el archivo FIT original para este análisis.',
+      ready: 'Análisis de IA listo.'
+    },
+    de: {
+      kicker: 'TRAININGSANALYSE',
+      fallbackHeadline: 'Aktivitätsanalyse',
+      pacing: 'Tempo & Belastung',
+      heartRate: 'Herzfrequenz',
+      runningForm: 'Laufform',
+      nextSession: 'Nächste Einheit',
+      positives: 'Was gut lief',
+      cautions: 'Worauf achten',
+      dataNotes: 'Datenhinweise',
+      noData: 'Nicht genügend Daten für eine Bewertung.',
+      noItem: 'Aus den verfügbaren Daten wurde kein konkreter Punkt erkannt.',
+      disclaimer: 'Die KI-generierte Trainingsanalyse dient nur zur Information und ist keine medizinische Beratung. FIT2CSV speichert die ursprüngliche FIT-Datei für diese Analyse nicht.',
+      ready: 'KI-Analyse ist fertig.'
+    },
+    fr: {
+      kicker: 'ANALYSE DE LA SÉANCE',
+      fallbackHeadline: "Analyse de l’activité",
+      pacing: 'Allure & effort',
+      heartRate: 'Fréquence cardiaque',
+      runningForm: 'Technique de course',
+      nextSession: 'Prochaine séance',
+      positives: 'Points positifs',
+      cautions: 'Points à surveiller',
+      dataNotes: 'Notes sur les données',
+      noData: 'Données insuffisantes pour évaluer.',
+      noItem: 'Aucun élément précis identifié à partir des données disponibles.',
+      disclaimer: "L’analyse générée par l’IA est fournie à titre informatif et ne constitue pas un avis médical. FIT2CSV ne conserve pas le fichier FIT d’origine pour cette analyse.",
+      ready: 'Analyse IA prête.'
+    },
+    ja: {
+      kicker: 'ワークアウト分析',
+      fallbackHeadline: 'アクティビティ分析',
+      pacing: 'ペースと強度',
+      heartRate: '心拍数',
+      runningForm: 'ランニングフォーム',
+      nextSession: '次回セッション',
+      positives: '良かった点',
+      cautions: '注意点',
+      dataNotes: 'データ注記',
+      noData: '評価するためのデータが不足しています。',
+      noItem: '利用可能なデータから特定の項目は確認できませんでした。',
+      disclaimer: 'AIによるワークアウト分析は参考情報であり、医療上の助言ではありません。FIT2CSVはこの分析のために元のFITファイルを保持しません。',
+      ready: 'AI分析が完了しました。'
+    },
+    ko: {
+      kicker: '운동 분석',
+      fallbackHeadline: '활동 분석',
+      pacing: '페이스 및 강도',
+      heartRate: '심박수',
+      runningForm: '러닝 폼',
+      nextSession: '다음 세션',
+      positives: '잘된 점',
+      cautions: '주의할 점',
+      dataNotes: '데이터 참고',
+      noData: '평가할 데이터가 충분하지 않습니다.',
+      noItem: '사용 가능한 데이터에서 특정 항목을 확인하지 못했습니다.',
+      disclaimer: 'AI 운동 분석은 참고용이며 의료 조언이 아닙니다. FIT2CSV는 이 분석을 위해 원본 FIT 파일을 보관하지 않습니다.',
+      ready: 'AI 분석이 완료되었습니다.'
+    },
+    zh: {
+      kicker: '训练分析',
+      fallbackHeadline: '活动分析',
+      pacing: '配速与强度',
+      heartRate: '心率',
+      runningForm: '跑步姿态',
+      nextSession: '下一次训练',
+      positives: '表现良好',
+      cautions: '需要注意',
+      dataNotes: '数据说明',
+      noData: '数据不足，无法评估。',
+      noItem: '未能从现有数据中识别出具体项目。',
+      disclaimer: 'AI 生成的训练分析仅供参考，不构成医疗建议。FIT2CSV 不会为此次分析保留原始 FIT 文件。',
+      ready: 'AI 分析已完成。'
+    }
+  };
+  return labels[language] || labels.en;
 }
 
 function buildAiAnalysisPayload(data) {
@@ -472,39 +618,40 @@ function compactObject(obj) {
   return Object.fromEntries(Object.entries(obj).filter(([, value]) => value !== null && value !== undefined));
 }
 
-function renderAiResult(analysis) {
+function renderAiResult(analysis, language = 'en') {
+  const ui = getAiUiText(language);
   const positives = Array.isArray(analysis?.positives) ? analysis.positives : [];
   const cautions = Array.isArray(analysis?.cautions) ? analysis.cautions : [];
   const notes = Array.isArray(analysis?.data_notes) ? analysis.data_notes : [];
 
   els.aiResult.innerHTML = `
     <div class="ai-result-hero">
-      <span class="ai-kicker">WORKOUT ANALYSIS</span>
-      <h4>${escapeHtml(analysis?.headline || 'Activity analysis')}</h4>
+      <span class="ai-kicker">${escapeHtml(ui.kicker)}</span>
+      <h4>${escapeHtml(analysis?.headline || ui.fallbackHeadline)}</h4>
       <p>${escapeHtml(analysis?.overall_assessment || '—')}</p>
     </div>
     <div class="ai-analysis-grid">
-      ${aiTextCard('Pacing & Effort', analysis?.pacing_and_effort)}
-      ${aiTextCard('Heart Rate', analysis?.heart_rate)}
-      ${aiTextCard('Running Form', analysis?.running_form)}
-      ${aiTextCard('Next Session', analysis?.next_session)}
+      ${aiTextCard(ui.pacing, analysis?.pacing_and_effort, ui.noData)}
+      ${aiTextCard(ui.heartRate, analysis?.heart_rate, ui.noData)}
+      ${aiTextCard(ui.runningForm, analysis?.running_form, ui.noData)}
+      ${aiTextCard(ui.nextSession, analysis?.next_session, ui.noData)}
     </div>
     <div class="ai-list-grid">
-      ${aiListCard('What went well', positives)}
-      ${aiListCard('Watch-outs', cautions)}
+      ${aiListCard(ui.positives, positives, ui.noItem)}
+      ${aiListCard(ui.cautions, cautions, ui.noItem)}
     </div>
-    ${notes.length ? `<div class="ai-data-notes"><strong>Data notes:</strong> ${notes.map(escapeHtml).join(' • ')}</div>` : ''}
-    <div class="ai-disclaimer">AI-generated workout analysis is informational and is not medical advice. FIT2CSV does not retain the original FIT file for this analysis.</div>
+    ${notes.length ? `<div class="ai-data-notes"><strong>${escapeHtml(ui.dataNotes)}:</strong> ${notes.map(escapeHtml).join(' • ')}</div>` : ''}
+    <div class="ai-disclaimer">${escapeHtml(ui.disclaimer)}</div>
   `;
   els.aiResult.classList.remove('hidden');
 }
 
-function aiTextCard(title, text) {
-  return `<article class="ai-analysis-card"><h5>${escapeHtml(title)}</h5><p>${escapeHtml(text || 'Not enough data to assess.')}</p></article>`;
+function aiTextCard(title, text, fallback = 'Not enough data to assess.') {
+  return `<article class="ai-analysis-card"><h5>${escapeHtml(title)}</h5><p>${escapeHtml(text || fallback)}</p></article>`;
 }
 
-function aiListCard(title, items) {
-  const rows = items.length ? items.map((item) => `<li>${escapeHtml(item)}</li>`).join('') : '<li>No specific item identified from the available data.</li>';
+function aiListCard(title, items, fallback = 'No specific item identified from the available data.') {
+  const rows = items.length ? items.map((item) => `<li>${escapeHtml(item)}</li>`).join('') : `<li>${escapeHtml(fallback)}</li>`;
   return `<article class="ai-list-card"><h5>${escapeHtml(title)}</h5><ul>${rows}</ul></article>`;
 }
 
@@ -519,6 +666,7 @@ function resetAiPanel() {
   els.aiResult.classList.add('hidden');
   els.aiResult.innerHTML = '';
   els.analyzeAiBtn.disabled = false;
+  if (els.aiLanguage) els.aiLanguage.disabled = false;
 }
 
 function reset() {

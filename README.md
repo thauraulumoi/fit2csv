@@ -141,6 +141,22 @@ When the user explicitly clicks **Analyze with AI**:
 
 The AI module is intentionally separate from the Full CSV export. No AI-derived values are written into the CSV.
 
+### Analysis languages
+
+The analysis language selector supports:
+
+- Auto (Browser Language)
+- English
+- Tiếng Việt
+- Español
+- Deutsch
+- Français
+- 日本語
+- 한국어
+- 中文
+
+`Auto` detects the browser's primary language and falls back to English when it is not one of the supported languages. The selected language is sent as a language code with the compact analysis payload; the FIT file remains local.
+
 ### Cloudflare configuration
 
 `wrangler.jsonc` now includes both the static-assets binding and Workers AI binding:

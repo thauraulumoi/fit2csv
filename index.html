@@ -149,17 +149,33 @@
         <div class="ai-panel card">
           <div class="ai-panel-header">
             <div>
-              <span class="eyebrow">OPTIONAL • CLOUDFLARE WORKERS AI</span>
+              <span class="eyebrow">OPTIONAL • AI ANALYSIS</span>
               <h3>AI Workout Analysis</h3>
               <p>Get a concise analysis of pacing, heart rate, running form and a conservative next-session suggestion.</p>
             </div>
-            <button id="analyzeAiBtn" class="ai-btn" type="button">
-              <span>Analyze with AI</span>
-              <small>Single activity analysis</small>
-            </button>
+            <div class="ai-controls">
+              <label class="ai-language-control" for="aiLanguage">
+                <span>Analysis language</span>
+                <select id="aiLanguage" aria-label="Analysis language">
+                  <option value="auto" selected>Auto (Browser Language)</option>
+                  <option value="en">English</option>
+                  <option value="vi">Tiếng Việt</option>
+                  <option value="es">Español</option>
+                  <option value="de">Deutsch</option>
+                  <option value="fr">Français</option>
+                  <option value="ja">日本語</option>
+                  <option value="ko">한국어</option>
+                  <option value="zh">中文</option>
+                </select>
+              </label>
+              <button id="analyzeAiBtn" class="ai-btn" type="button">
+                <span>Analyze with AI</span>
+                <small>Single activity analysis</small>
+              </button>
+            </div>
           </div>
           <div class="ai-privacy-note">
-            <strong>Privacy:</strong> Your FIT file stays in the browser. Only compact workout metrics are sent to Cloudflare Workers AI after you click Analyze. Filename, GPS coordinates and device serial number are excluded.
+            <strong>Privacy:</strong> Your FIT file stays in the browser. Only compact workout metrics are sent to AI after you click Analyze. Filename, GPS coordinates and device serial number are excluded.
           </div>
           <div id="aiStatus" class="ai-status hidden" aria-live="polite"></div>
           <div id="aiResult" class="ai-result hidden"></div>

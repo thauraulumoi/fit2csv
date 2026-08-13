@@ -1,6 +1,17 @@
 const MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 const MAX_BODY_BYTES = 96 * 1024;
 
+const LANGUAGE_NAMES = {
+  en: 'English',
+  vi: 'Vietnamese',
+  es: 'Spanish',
+  de: 'German',
+  fr: 'French',
+  ja: 'Japanese',
+  ko: 'Korean',
+  zh: 'Chinese'
+};
+
 const ANALYSIS_SCHEMA = {
   type: 'object',
   properties: {
@@ -75,6 +86,9 @@ async function handleAnalyze(request, env) {
     return json({ error: validationError }, 400);
   }
 
+  const languageCode = String(payload.analysis_language || 'en').toLowerCase();
+  const languageName = LANGUAGE_NAMES[languageCode] || LANGUAGE_NAMES.en;
+
   const system = `You are FIT2CSV Workout Analyst. Analyze one endurance workout from compact, deterministic metrics derived in the user's browser from a FIT file.
 
 Rules:
@@ -86,6 +100,7 @@ Rules:
 - Keep the tone concise, practical, and coach-like. Avoid hype.
 - next_session must be a conservative general suggestion based only on this single workout; do not pretend to know the athlete's full training history.
 - data_notes should state important limitations or missing fields that affect confidence.
+- Write every human-facing string value in ${languageName}. Keep JSON property names exactly as defined by the schema.
 - Return only the requested JSON schema.`;
 
   const user = `Analyze this workout. Values retain the parser/application units shown in the JSON. The payload intentionally excludes filename, serial number, GPS coordinates, and raw second-by-second records.\n\n${JSON.stringify(payload)}`;
@@ -112,7 +127,7 @@ Rules:
     return json({
       analysis,
       model: MODEL,
-      privacy: 'Only compact workout metrics were submitted to Workers AI; the FIT file itself was not uploaded.',
+      privacy: 'Only compact workout metrics were submitted to AI; the FIT file itself was not uploaded.',
     }, 200, {
       'Cache-Control': 'no-store',
     });
@@ -134,6 +149,9 @@ function validatePayload(payload) {
   if (!payload.session || typeof payload.session !== 'object') return 'Session summary is required.';
   if (!Array.isArray(payload.laps) || payload.laps.length > 40) return 'Invalid lap data.';
   if (!Array.isArray(payload.windows) || payload.windows.length > 20) return 'Invalid record-window data.';
+  if (payload.analysis_language !== undefined && !LANGUAGE_NAMES[String(payload.analysis_language).toLowerCase()]) {
+    return 'Unsupported analysis language.';
+  }
   return null;
 }
 
