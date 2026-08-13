@@ -1,5 +1,6 @@
-const MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+const MODEL = 'openai/gpt-5.6-terra';
 const MAX_BODY_BYTES = 96 * 1024;
+const DAILY_LIMIT = 3;
 
 const LANGUAGE_NAMES = {
   en: 'English',
@@ -56,8 +57,11 @@ async function handleAnalyze(request, env) {
     return json({ error: 'Method not allowed.' }, 405, { Allow: 'POST' });
   }
 
-  if (!env.AI) {
-    return json({ error: 'Workers AI binding is not configured.' }, 503);
+  if (!env.AI || !env.AI_LIMITER) {
+    return json({
+      code: 'AI_SERVICE_UNAVAILABLE',
+      error: 'AI analysis is temporarily unavailable.'
+    }, 503);
   }
 
   const contentType = request.headers.get('content-type') || '';
@@ -86,62 +90,149 @@ async function handleAnalyze(request, env) {
     return json({ error: validationError }, 400);
   }
 
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  if (!ip) {
+    return json({
+      code: 'AI_SERVICE_UNAVAILABLE',
+      error: 'AI analysis is temporarily unavailable.'
+    }, 503);
+  }
+
+  const ipHash = await sha256Hex(ip);
+  const limiterId = env.AI_LIMITER.idFromName(ipHash);
+  const limiter = env.AI_LIMITER.get(limiterId);
+
+  const claimResponse = await limiter.fetch('https://limiter/claim', { method: 'POST' });
+  const claim = await claimResponse.json();
+
+  if (!claim.allowed) {
+    return json({
+      code: 'DAILY_LIMIT_REACHED',
+      error: 'Daily AI analysis limit reached.',
+      limit: DAILY_LIMIT,
+      remaining: 0,
+      resets_at: claim.resets_at
+    }, 429, {
+      'Retry-After': String(claim.retry_after_seconds || secondsUntilNextUtcDay())
+    });
+  }
+
   const languageCode = String(payload.analysis_language || 'en').toLowerCase();
   const languageName = LANGUAGE_NAMES[languageCode] || LANGUAGE_NAMES.en;
 
-  const system = `You are FIT2CSV Workout Analyst. Analyze one endurance workout from compact, deterministic metrics derived in the user's browser from a FIT file.
+  const instructions = `You are FIT2CSV Workout Analyst. Analyze one endurance workout from compact, deterministic metrics derived in the user's browser from a FIT file.
 
 Rules:
 - Base every claim only on the supplied data. Never invent missing values.
 - This is workout analysis, not medical diagnosis. Do not diagnose disease, injury, arrhythmia, or other health conditions.
 - If heart-rate behavior looks unusual, describe the data pattern neutrally and suggest reducing effort or seeking professional advice only when appropriate; do not make a diagnosis.
-- Distinguish intentional workload increases from heart-rate drift. If speed/power also rises, do not label the HR rise as drift without evidence.
-- Use lap and window trends when available. Comment on cadence/power/form only when those fields are present.
+- Distinguish intentional workload increases from heart-rate drift. If speed or power also rises, do not label the HR rise as drift without evidence.
+- Use lap and window trends when available.
+- Comment on cadence, power, and running form only when those fields are present.
 - Keep the tone concise, practical, and coach-like. Avoid hype.
 - next_session must be a conservative general suggestion based only on this single workout; do not pretend to know the athlete's full training history.
 - data_notes should state important limitations or missing fields that affect confidence.
 - Write every human-facing string value in ${languageName}. Keep JSON property names exactly as defined by the schema.
-- Return only the requested JSON schema.`;
+- Return only JSON matching the requested schema.`;
 
-  const user = `Analyze this workout. Values retain the parser/application units shown in the JSON. The payload intentionally excludes filename, serial number, GPS coordinates, and raw second-by-second records.\n\n${JSON.stringify(payload)}`;
+  const input = `Analyze this workout. Values retain the units shown in the JSON. The payload intentionally excludes filename, serial number, GPS coordinates, and raw second-by-second records.
+
+${JSON.stringify(payload)}`;
 
   try {
     const result = await env.AI.run(MODEL, {
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-      response_format: {
-        type: 'json_schema',
-        json_schema: ANALYSIS_SCHEMA,
+      input,
+      instructions,
+      reasoning: {
+        effort: 'low'
       },
-      temperature: 0.2,
-      max_tokens: 1000,
+      text: {
+        format: {
+          type: 'json_schema',
+          name: 'fit2csv_workout_analysis',
+          strict: true,
+          schema: ANALYSIS_SCHEMA
+        }
+      },
+      max_output_tokens: 1400,
+      store: false
     });
 
-    const analysis = normalizeAiResponse(result?.response ?? result);
-    if (!analysis || typeof analysis !== 'object') {
-      throw new Error('Workers AI returned an unexpected response.');
+    const outputText = extractOutputText(result);
+    if (!outputText) {
+      await refundClaim(limiter);
+      throw new Error('AI returned no structured output.');
+    }
+
+    let analysis;
+    try {
+      analysis = JSON.parse(outputText);
+    } catch {
+      await refundClaim(limiter);
+      throw new Error('AI returned invalid structured output.');
     }
 
     return json({
       analysis,
-      model: MODEL,
-      privacy: 'Only compact workout metrics were submitted to AI; the FIT file itself was not uploaded.',
+      remaining: Math.max(0, Number(claim.remaining ?? 0)),
+      limit: DAILY_LIMIT,
+      resets_at: claim.resets_at
     }, 200, {
-      'Cache-Control': 'no-store',
+      'Cache-Control': 'no-store'
     });
   } catch (error) {
-    console.error('Workers AI analysis failed:', error);
-    return json({ error: 'AI analysis is temporarily unavailable. Please try again later.' }, 502);
+    console.error('Cloudflare AI analysis failed:', error);
+    await refundClaim(limiter);
+
+    const errorText = String(error?.message || error || '').toLowerCase();
+
+    if (errorText.includes('quota') || errorText.includes('usage limit')) {
+      return json({
+        code: 'AI_SERVICE_QUOTA_EXCEEDED',
+        error: 'AI analysis is temporarily unavailable because the service usage limit has been reached.'
+      }, 503);
+    }
+
+    if (errorText.includes('rate limit') || errorText.includes('too many')) {
+      return json({
+        code: 'AI_SERVICE_BUSY',
+        error: 'AI is busy right now. Please try again shortly.'
+      }, 429, { 'Retry-After': '30' });
+    }
+
+    return json({
+      code: 'AI_SERVICE_UNAVAILABLE',
+      error: 'AI analysis is temporarily unavailable. Please try again later.'
+    }, 502);
   }
 }
 
-function normalizeAiResponse(value) {
-  if (typeof value === 'string') {
-    try { return JSON.parse(value); } catch { return null; }
+function extractOutputText(response) {
+  if (typeof response?.output_text === 'string' && response.output_text) {
+    return response.output_text;
   }
-  return value;
+
+  for (const item of response?.output || []) {
+    for (const content of item?.content || []) {
+      if (content?.type === 'output_text' && typeof content.text === 'string') {
+        return content.text;
+      }
+    }
+  }
+
+  if (typeof response?.response === 'string' && response.response) {
+    return response.response;
+  }
+
+  return null;
+}
+
+async function refundClaim(limiter) {
+  try {
+    await limiter.fetch('https://limiter/refund', { method: 'POST' });
+  } catch (error) {
+    console.error('Failed to refund AI quota claim:', error);
+  }
 }
 
 function validatePayload(payload) {
@@ -155,13 +246,98 @@ function validatePayload(payload) {
   return null;
 }
 
+async function sha256Hex(value) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function utcDateKey(now = new Date()) {
+  return now.toISOString().slice(0, 10);
+}
+
+function nextUtcDayIso(now = new Date()) {
+  const next = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() + 1,
+    0, 0, 0, 0
+  ));
+  return next.toISOString();
+}
+
+function secondsUntilNextUtcDay(now = new Date()) {
+  return Math.max(1, Math.ceil((Date.parse(nextUtcDayIso(now)) - now.getTime()) / 1000));
+}
+
 function json(body, status = 200, extraHeaders = {}) {
   return Response.json(body, {
     status,
     headers: {
       'Cache-Control': 'no-store',
       'X-Content-Type-Options': 'nosniff',
-      ...extraHeaders,
-    },
+      ...extraHeaders
+    }
   });
+}
+
+/**
+ * One Durable Object instance is used per hashed client IP.
+ * Each IP can successfully analyze at most 3 activities per UTC day.
+ */
+export class AiDailyLimit {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+
+    if (request.method !== 'POST') {
+      return Response.json({ error: 'Method not allowed.' }, { status: 405 });
+    }
+
+    const now = new Date();
+    const today = utcDateKey(now);
+    const resetsAt = nextUtcDayIso(now);
+
+    const stored = await this.state.storage.get('usage');
+    let usage = stored && stored.date === today
+      ? stored
+      : { date: today, count: 0 };
+
+    if (url.pathname === '/claim') {
+      if (usage.count >= DAILY_LIMIT) {
+        return Response.json({
+          allowed: false,
+          remaining: 0,
+          resets_at: resetsAt,
+          retry_after_seconds: secondsUntilNextUtcDay(now)
+        });
+      }
+
+      usage.count += 1;
+      await this.state.storage.put('usage', usage);
+
+      return Response.json({
+        allowed: true,
+        remaining: Math.max(0, DAILY_LIMIT - usage.count),
+        resets_at: resetsAt
+      });
+    }
+
+    if (url.pathname === '/refund') {
+      usage.count = Math.max(0, usage.count - 1);
+      await this.state.storage.put('usage', usage);
+
+      return Response.json({
+        ok: true,
+        remaining: Math.max(0, DAILY_LIMIT - usage.count),
+        resets_at: resetsAt
+      });
+    }
+
+    return Response.json({ error: 'Not found.' }, { status: 404 });
+  }
 }

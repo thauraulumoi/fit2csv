@@ -322,7 +322,17 @@ async function analyzeWithAi() {
     try { body = await response.json(); } catch {}
 
     if (!response.ok) {
-      throw new Error(body?.error || `AI request failed (${response.status}).`);
+      const ui = getAiUiText(language);
+      const messages = {
+        DAILY_LIMIT_REACHED: ui.dailyLimit,
+        AI_SERVICE_QUOTA_EXCEEDED: ui.serviceQuota,
+        AI_SERVICE_BUSY: ui.serviceBusy,
+        AI_SERVICE_UNAVAILABLE: ui.serviceUnavailable,
+      };
+      const message = messages[body?.code] || body?.error || ui.serviceUnavailable;
+      const requestError = new Error(message);
+      requestError.code = body?.code;
+      throw requestError;
     }
 
     renderAiResult(body.analysis, language);
@@ -365,7 +375,11 @@ function getAiUiText(language) {
       noData: 'Not enough data to assess.',
       noItem: 'No specific item identified from the available data.',
       disclaimer: 'AI-generated workout analysis is informational and is not medical advice. FIT2CSV does not retain the original FIT file for this analysis.',
-      ready: 'AI analysis ready.'
+      ready: 'AI analysis ready.',
+      dailyLimit: 'Daily AI analysis limit reached. Each IP can analyze up to 3 activities per day. Please try again tomorrow.',
+      serviceQuota: 'AI analysis is temporarily unavailable because the service usage limit has been reached. Please try again later.',
+      serviceBusy: 'AI is busy right now. Please wait a moment and try again.',
+      serviceUnavailable: 'AI analysis is temporarily unavailable. Please try again later.'
     },
     vi: {
       kicker: 'PHÂN TÍCH BUỔI TẬP',
@@ -380,7 +394,11 @@ function getAiUiText(language) {
       noData: 'Không đủ dữ liệu để đánh giá.',
       noItem: 'Không xác định được điểm cụ thể từ dữ liệu hiện có.',
       disclaimer: 'Phân tích do AI tạo chỉ mang tính tham khảo và không phải tư vấn y tế. FIT2CSV không lưu file FIT gốc cho lần phân tích này.',
-      ready: 'Phân tích AI đã sẵn sàng.'
+      ready: 'Phân tích AI đã sẵn sàng.',
+      dailyLimit: 'Đã đạt giới hạn phân tích AI trong ngày. Mỗi IP được phân tích tối đa 3 hoạt động mỗi ngày. Vui lòng thử lại vào ngày mai.',
+      serviceQuota: 'Phân tích AI tạm thời không khả dụng vì dịch vụ đã đạt giới hạn sử dụng. Vui lòng thử lại sau.',
+      serviceBusy: 'AI hiện đang bận. Vui lòng đợi một chút rồi thử lại.',
+      serviceUnavailable: 'Phân tích AI tạm thời không khả dụng. Vui lòng thử lại sau.'
     },
     es: {
       kicker: 'ANÁLISIS DEL ENTRENAMIENTO',
@@ -395,7 +413,11 @@ function getAiUiText(language) {
       noData: 'No hay suficientes datos para evaluar.',
       noItem: 'No se identificó ningún punto específico con los datos disponibles.',
       disclaimer: 'El análisis generado por IA es informativo y no constituye consejo médico. FIT2CSV no conserva el archivo FIT original para este análisis.',
-      ready: 'Análisis de IA listo.'
+      ready: 'Análisis de IA listo.',
+      dailyLimit: 'Se alcanzó el límite diario de análisis con IA. Cada IP puede analizar hasta 3 actividades al día. Inténtalo de nuevo mañana.',
+      serviceQuota: 'El análisis con IA no está disponible temporalmente porque se alcanzó el límite de uso del servicio. Inténtalo más tarde.',
+      serviceBusy: 'La IA está ocupada en este momento. Espera un momento e inténtalo de nuevo.',
+      serviceUnavailable: 'El análisis con IA no está disponible temporalmente. Inténtalo más tarde.'
     },
     de: {
       kicker: 'TRAININGSANALYSE',
@@ -410,7 +432,11 @@ function getAiUiText(language) {
       noData: 'Nicht genügend Daten für eine Bewertung.',
       noItem: 'Aus den verfügbaren Daten wurde kein konkreter Punkt erkannt.',
       disclaimer: 'Die KI-generierte Trainingsanalyse dient nur zur Information und ist keine medizinische Beratung. FIT2CSV speichert die ursprüngliche FIT-Datei für diese Analyse nicht.',
-      ready: 'KI-Analyse ist fertig.'
+      ready: 'KI-Analyse ist fertig.',
+      dailyLimit: 'Das tägliche KI-Analyselimit wurde erreicht. Pro IP sind maximal 3 Analysen pro Tag möglich. Bitte morgen erneut versuchen.',
+      serviceQuota: 'Die KI-Analyse ist vorübergehend nicht verfügbar, da das Nutzungslimit des Dienstes erreicht wurde. Bitte später erneut versuchen.',
+      serviceBusy: 'Die KI ist derzeit ausgelastet. Bitte kurz warten und erneut versuchen.',
+      serviceUnavailable: 'Die KI-Analyse ist vorübergehend nicht verfügbar. Bitte später erneut versuchen.'
     },
     fr: {
       kicker: 'ANALYSE DE LA SÉANCE',
@@ -425,7 +451,11 @@ function getAiUiText(language) {
       noData: 'Données insuffisantes pour évaluer.',
       noItem: 'Aucun élément précis identifié à partir des données disponibles.',
       disclaimer: "L’analyse générée par l’IA est fournie à titre informatif et ne constitue pas un avis médical. FIT2CSV ne conserve pas le fichier FIT d’origine pour cette analyse.",
-      ready: 'Analyse IA prête.'
+      ready: 'Analyse IA prête.',
+      dailyLimit: 'La limite quotidienne d’analyse IA est atteinte. Chaque IP peut analyser jusqu’à 3 activités par jour. Réessayez demain.',
+      serviceQuota: 'L’analyse IA est temporairement indisponible car la limite d’utilisation du service a été atteinte. Réessayez plus tard.',
+      serviceBusy: 'L’IA est occupée pour le moment. Patientez un instant puis réessayez.',
+      serviceUnavailable: 'L’analyse IA est temporairement indisponible. Réessayez plus tard.'
     },
     ja: {
       kicker: 'ワークアウト分析',
@@ -440,7 +470,11 @@ function getAiUiText(language) {
       noData: '評価するためのデータが不足しています。',
       noItem: '利用可能なデータから特定の項目は確認できませんでした。',
       disclaimer: 'AIによるワークアウト分析は参考情報であり、医療上の助言ではありません。FIT2CSVはこの分析のために元のFITファイルを保持しません。',
-      ready: 'AI分析が完了しました。'
+      ready: 'AI分析が完了しました。',
+      dailyLimit: '1日のAI分析上限に達しました。1つのIPにつき1日3回まで分析できます。明日もう一度お試しください。',
+      serviceQuota: 'サービスの利用上限に達したため、AI分析は一時的に利用できません。後でもう一度お試しください。',
+      serviceBusy: 'AIが混み合っています。少し待ってからもう一度お試しください。',
+      serviceUnavailable: 'AI分析は一時的に利用できません。後でもう一度お試しください。'
     },
     ko: {
       kicker: '운동 분석',
@@ -455,7 +489,11 @@ function getAiUiText(language) {
       noData: '평가할 데이터가 충분하지 않습니다.',
       noItem: '사용 가능한 데이터에서 특정 항목을 확인하지 못했습니다.',
       disclaimer: 'AI 운동 분석은 참고용이며 의료 조언이 아닙니다. FIT2CSV는 이 분석을 위해 원본 FIT 파일을 보관하지 않습니다.',
-      ready: 'AI 분석이 완료되었습니다.'
+      ready: 'AI 분석이 완료되었습니다.',
+      dailyLimit: '일일 AI 분석 한도에 도달했습니다. IP당 하루 최대 3개의 활동을 분석할 수 있습니다. 내일 다시 시도해 주세요.',
+      serviceQuota: '서비스 사용 한도에 도달하여 AI 분석을 일시적으로 사용할 수 없습니다. 나중에 다시 시도해 주세요.',
+      serviceBusy: '현재 AI 요청이 많습니다. 잠시 후 다시 시도해 주세요.',
+      serviceUnavailable: 'AI 분석을 일시적으로 사용할 수 없습니다. 나중에 다시 시도해 주세요.'
     },
     zh: {
       kicker: '训练分析',
@@ -470,7 +508,11 @@ function getAiUiText(language) {
       noData: '数据不足，无法评估。',
       noItem: '未能从现有数据中识别出具体项目。',
       disclaimer: 'AI 生成的训练分析仅供参考，不构成医疗建议。FIT2CSV 不会为此次分析保留原始 FIT 文件。',
-      ready: 'AI 分析已完成。'
+      ready: 'AI 分析已完成。',
+      dailyLimit: '已达到每日 AI 分析上限。每个 IP 每天最多可分析 3 个活动，请明天再试。',
+      serviceQuota: '由于 AI 服务已达到使用上限，分析暂时不可用，请稍后再试。',
+      serviceBusy: 'AI 当前较忙，请稍等片刻后重试。',
+      serviceUnavailable: 'AI 分析暂时不可用，请稍后再试。'
     }
   };
   return labels[language] || labels.en;

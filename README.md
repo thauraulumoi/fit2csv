@@ -129,17 +129,56 @@ All three pages use unique metadata, canonical URLs, visible content, internal l
 
 ## Phase 2 — Optional AI Workout Analysis
 
-FIT2CSV now includes an optional **Analyze with AI** action powered by Cloudflare Workers AI. The FIT-to-CSV converter remains browser-only and unchanged.
+FIT2CSV includes an optional **Analyze with AI** action. The FIT-to-CSV converter remains browser-only and unchanged.
 
-When the user explicitly clicks **Analyze with AI**:
+### AI model
+
+Workout analysis uses the OpenAI model available through Cloudflare AI:
+
+```text
+openai/gpt-5.6-terra
+```
+
+The Worker calls the model directly through the Cloudflare `AI` binding:
+
+```js
+env.AI.run('openai/gpt-5.6-terra', ...)
+```
+
+No OpenAI API key is stored in the frontend, GitHub repository, or Worker secrets for this integration. A separate Workers AI REST API token is not required when the model is called from the Worker through `env.AI`.
+
+### Privacy
+
+When a user explicitly clicks **Analyze with AI**:
 
 - The original FIT file is **not uploaded**.
-- The filename, GPS coordinates, and device serial number are excluded.
+- Filename, GPS coordinates, and device serial number are excluded.
 - The browser creates a compact analysis payload from session metrics, laps, and aggregated record windows.
-- That compact JSON is sent to `POST /api/analyze`.
-- The Worker calls `@cf/meta/llama-3.3-70b-instruct-fp8-fast` through the `AI` binding and returns structured workout feedback.
+- Only that compact payload is sent to `POST /api/analyze`.
+- The Worker sends the compact metrics to the configured AI model.
+- No AI-derived values are written into the downloaded Full CSV.
 
-The AI module is intentionally separate from the Full CSV export. No AI-derived values are written into the CSV.
+### Daily usage limit
+
+AI analysis is limited to:
+
+```text
+3 successful analyses per IP address per UTC day
+```
+
+The limit is enforced with a SQLite-backed Cloudflare Durable Object. The client IP is SHA-256 hashed before it is used to select the Durable Object; the raw IP address is not written to application storage.
+
+If an AI request fails, the claimed analysis slot is refunded.
+
+A successful analysis response includes the number of remaining analyses for that IP. When the daily limit is reached, the API returns HTTP `429` with code:
+
+```text
+DAILY_LIMIT_REACHED
+```
+
+The frontend displays a localized message telling the user to try again the next day.
+
+> Note: IP-based limits can affect multiple people who share the same public IP, such as users behind a company network, carrier NAT, or VPN.
 
 ### Analysis languages
 
@@ -155,37 +194,19 @@ The analysis language selector supports:
 - 한국어
 - 中文
 
-`Auto` detects the browser's primary language and falls back to English when it is not one of the supported languages. The selected language is sent as a language code with the compact analysis payload; the FIT file remains local.
+`Auto` detects the browser's primary language and falls back to English when it is not supported.
 
 ### Cloudflare configuration
 
-`wrangler.jsonc` now includes both the static-assets binding and Workers AI binding:
+`wrangler.jsonc` includes:
 
 ```jsonc
-{
-  "main": "src/worker.js",
-  "assets": {
-    "directory": "./dist",
-    "binding": "ASSETS",
-    "run_worker_first": ["/api/*"]
-  },
-  "ai": {
-    "binding": "AI"
-  }
+"ai": {
+  "binding": "AI"
 }
 ```
 
-For normal frontend-only development:
-
-```bash
-npm run dev
-```
-
-To test the Worker API locally (Workers AI usage may be billed by Cloudflare):
-
-```bash
-npm run dev:worker
-```
+and the SQLite-backed Durable Object used for the 3-per-IP daily quota.
 
 Production deployment remains:
 
