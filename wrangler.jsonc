@@ -12,5 +12,19 @@
   },
   "ai": {
     "binding": "AI"
-  }
+  },
+  "migrations": [
+    {
+      "tag": "v1-ai-daily-limit",
+      "new_sqlite_classes": [
+        "AiDailyLimit"
+      ]
+    },
+    {
+      "tag": "v2-remove-ai-daily-limit",
+      "deleted_classes": [
+        "AiDailyLimit"
+      ]
+    }
+  ]
 }
