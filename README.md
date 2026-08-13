@@ -206,3 +206,19 @@ npm run deploy
 ### AI response handling
 
 The Worker does not depend on JSON Mode for `@cf/openai/gpt-oss-120b`. The model is instructed to return one JSON object, and the Worker accepts both object and string response shapes, including a defensive fallback for accidental Markdown code fences. The returned structure is validated before it is shown in the UI.
+
+
+### gpt-oss Responses API binding
+
+This build calls `@cf/openai/gpt-oss-120b` using the Responses API-style Workers binding:
+
+```js
+env.AI.run("@cf/openai/gpt-oss-120b", {
+  instructions: "...",
+  input: "...",
+  reasoning: { effort: "low" },
+  max_output_tokens: 1400
+})
+```
+
+The response parser checks `output_text`, Responses API `output[].content[].text`, and the legacy Workers AI `response` field for compatibility.

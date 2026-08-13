@@ -116,10 +116,7 @@ ${JSON.stringify(payload)}`;
 
   try {
     const result = await env.AI.run(MODEL, {
-      messages: [
-        {
-          role: 'system',
-          content: `${systemPrompt}
+      instructions: `${systemPrompt}
 
 Return exactly one valid JSON object and nothing else.
 Use this exact top-level structure:
@@ -135,13 +132,18 @@ Use this exact top-level structure:
   "data_notes": ["string"]
 }
 
-Do not wrap the JSON in Markdown or code fences.`
-        },
-        { role: 'user', content: userPrompt }
-      ],
-      max_tokens: 1400,
-      temperature: 0.2
+Do not wrap the JSON in Markdown or code fences.`,
+      input: userPrompt,
+      reasoning: { effort: 'low' },
+      max_output_tokens: 1400
     });
+
+    console.log('GPT-OSS response shape:', JSON.stringify({
+      has_output_text: typeof result?.output_text === 'string',
+      output_count: Array.isArray(result?.output) ? result.output.length : null,
+      has_response: result?.response !== undefined,
+      response_type: typeof result?.response
+    }));
 
     const analysis = normalizeAnalysisResponse(result);
 
@@ -163,7 +165,12 @@ Do not wrap the JSON in Markdown or code fences.`
       'Cache-Control': 'no-store'
     });
   } catch (error) {
-    console.error('Cloudflare Workers AI analysis failed:', error);
+    console.error('Cloudflare Workers AI analysis failed:', {
+      name: error?.name,
+      message: error?.message,
+      stack: error?.stack,
+      cause: error?.cause
+    });
 
     const errorText = String(error?.message || error || '').toLowerCase();
 
@@ -190,6 +197,36 @@ Do not wrap the JSON in Markdown or code fences.`
 
 
 function normalizeAnalysisResponse(result) {
+  // Current Cloudflare gpt-oss Workers Binding may return Responses API shape.
+  if (typeof result?.output_text === 'string' && result.output_text.trim()) {
+    return parseJsonLike(result.output_text);
+  }
+
+  if (Array.isArray(result?.output)) {
+    const texts = [];
+
+    for (const item of result.output) {
+      if (typeof item?.text === 'string') {
+        texts.push(item.text);
+      }
+
+      for (const content of item?.content || []) {
+        if (typeof content?.text === 'string') {
+          texts.push(content.text);
+        }
+        if (typeof content?.output_text === 'string') {
+          texts.push(content.output_text);
+        }
+      }
+    }
+
+    for (const text of texts) {
+      const parsed = parseJsonLike(text);
+      if (parsed) return parsed;
+    }
+  }
+
+  // Compatibility with Workers AI Run legacy response shape.
   if (result?.response && typeof result.response === 'object' && !Array.isArray(result.response)) {
     return result.response;
   }
@@ -200,17 +237,6 @@ function normalizeAnalysisResponse(result) {
 
   if (typeof result === 'string') {
     return parseJsonLike(result);
-  }
-
-  if (Array.isArray(result?.output)) {
-    for (const item of result.output) {
-      for (const content of item?.content || []) {
-        if (content?.type === 'output_text' && typeof content.text === 'string') {
-          const parsed = parseJsonLike(content.text);
-          if (parsed) return parsed;
-        }
-      }
-    }
   }
 
   return null;
