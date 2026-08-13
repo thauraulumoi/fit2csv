@@ -117,35 +117,43 @@ ${JSON.stringify(payload)}`;
   try {
     const result = await env.AI.run(MODEL, {
       messages: [
-        { role: 'system', content: systemPrompt },
+        {
+          role: 'system',
+          content: `${systemPrompt}
+
+Return exactly one valid JSON object and nothing else.
+Use this exact top-level structure:
+{
+  "headline": "string",
+  "overall_assessment": "string",
+  "pacing_and_effort": "string",
+  "heart_rate": "string",
+  "running_form": "string",
+  "positives": ["string"],
+  "cautions": ["string"],
+  "next_session": "string",
+  "data_notes": ["string"]
+}
+
+Do not wrap the JSON in Markdown or code fences.`
+        },
         { role: 'user', content: userPrompt }
       ],
-      response_format: {
-        type: 'json_schema',
-        json_schema: ANALYSIS_SCHEMA
-      },
       max_tokens: 1400,
       temperature: 0.2
     });
 
-    const responseText =
-      typeof result?.response === 'string'
-        ? result.response
-        : typeof result === 'string'
-          ? result
-          : null;
+    const analysis = normalizeAnalysisResponse(result);
 
-    if (!responseText) {
+    if (!analysis) {
       console.error('Unexpected gpt-oss response:', JSON.stringify(result));
-      throw new Error('AI returned no text response.');
+      throw new Error('AI returned an unsupported response format.');
     }
 
-    let analysis;
-    try {
-      analysis = JSON.parse(responseText);
-    } catch (error) {
-      console.error('Invalid JSON from gpt-oss:', responseText);
-      throw new Error('AI returned invalid structured output.');
+    const schemaError = validateAnalysisShape(analysis);
+    if (schemaError) {
+      console.error('Invalid AI analysis shape:', schemaError, JSON.stringify(analysis));
+      throw new Error('AI returned an invalid analysis structure.');
     }
 
     return json({
@@ -179,6 +187,91 @@ ${JSON.stringify(payload)}`;
     }, 502);
   }
 }
+
+
+function normalizeAnalysisResponse(result) {
+  if (result?.response && typeof result.response === 'object' && !Array.isArray(result.response)) {
+    return result.response;
+  }
+
+  if (typeof result?.response === 'string') {
+    return parseJsonLike(result.response);
+  }
+
+  if (typeof result === 'string') {
+    return parseJsonLike(result);
+  }
+
+  if (Array.isArray(result?.output)) {
+    for (const item of result.output) {
+      for (const content of item?.content || []) {
+        if (content?.type === 'output_text' && typeof content.text === 'string') {
+          const parsed = parseJsonLike(content.text);
+          if (parsed) return parsed;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+function parseJsonLike(value) {
+  if (typeof value !== 'string') return null;
+
+  let text = value.trim();
+
+  text = text
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {}
+
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    try {
+      const parsed = JSON.parse(text.slice(firstBrace, lastBrace + 1));
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+    } catch {}
+  }
+
+  return null;
+}
+
+function validateAnalysisShape(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return 'Analysis must be an object.';
+  }
+
+  const stringFields = [
+    'headline',
+    'overall_assessment',
+    'pacing_and_effort',
+    'heart_rate',
+    'running_form',
+    'next_session'
+  ];
+
+  for (const key of stringFields) {
+    if (typeof value[key] !== 'string') {
+      return `${key} must be a string.`;
+    }
+  }
+
+  for (const key of ['positives', 'cautions', 'data_notes']) {
+    if (!Array.isArray(value[key]) || !value[key].every((item) => typeof item === 'string')) {
+      return `${key} must be an array of strings.`;
+    }
+  }
+
+  return null;
+}
+
 
 function validatePayload(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {

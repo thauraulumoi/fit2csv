@@ -201,3 +201,8 @@ Production deployment remains:
 ```bash
 npm run deploy
 ```
+
+
+### AI response handling
+
+The Worker does not depend on JSON Mode for `@cf/openai/gpt-oss-120b`. The model is instructed to return one JSON object, and the Worker accepts both object and string response shapes, including a defensive fallback for accidental Markdown code fences. The returned structure is validated before it is shown in the UI.
