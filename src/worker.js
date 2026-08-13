@@ -1,4 +1,4 @@
-const MODEL = 'openai/gpt-5.6-terra';
+const MODEL = '@cf/openai/gpt-oss-120b';
 const MAX_BODY_BYTES = 96 * 1024;
 
 const LANGUAGE_NAMES = {
@@ -94,7 +94,7 @@ async function handleAnalyze(request, env) {
   const languageCode = String(payload.analysis_language || 'en').toLowerCase();
   const languageName = LANGUAGE_NAMES[languageCode] || LANGUAGE_NAMES.en;
 
-  const instructions = `You are FIT2CSV Workout Analyst. Analyze one endurance workout from compact, deterministic metrics derived in the user's browser from a FIT file.
+  const systemPrompt = `You are FIT2CSV Workout Analyst. Analyze one endurance workout from compact, deterministic metrics derived in the user's browser from a FIT file.
 
 Rules:
 - Base every claim only on the supplied data. Never invent missing values.
@@ -110,49 +110,56 @@ Rules:
 - Keep JSON property names exactly as defined by the schema.
 - Return only JSON matching the requested schema.`;
 
-  const input = `Analyze this workout. Values retain the units shown in the JSON. The payload intentionally excludes filename, serial number, GPS coordinates, and raw second-by-second records.
+  const userPrompt = `Analyze this workout. Values retain the units shown in the JSON. The payload intentionally excludes filename, serial number, GPS coordinates, and raw second-by-second records.
 
 ${JSON.stringify(payload)}`;
 
   try {
     const result = await env.AI.run(MODEL, {
-      input,
-      instructions,
-      reasoning: { effort: 'low' },
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'fit2csv_workout_analysis',
-          strict: true,
-          schema: ANALYSIS_SCHEMA
-        }
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: ANALYSIS_SCHEMA
       },
-      max_output_tokens: 1400,
-      store: false
+      max_tokens: 1400,
+      temperature: 0.2
     });
 
-    const outputText = extractOutputText(result);
+    const responseText =
+      typeof result?.response === 'string'
+        ? result.response
+        : typeof result === 'string'
+          ? result
+          : null;
 
-    if (!outputText) {
-      throw new Error('AI returned no structured output.');
+    if (!responseText) {
+      console.error('Unexpected gpt-oss response:', JSON.stringify(result));
+      throw new Error('AI returned no text response.');
     }
 
     let analysis;
     try {
-      analysis = JSON.parse(outputText);
-    } catch {
+      analysis = JSON.parse(responseText);
+    } catch (error) {
+      console.error('Invalid JSON from gpt-oss:', responseText);
       throw new Error('AI returned invalid structured output.');
     }
 
-    return json({ analysis }, 200, {
+    return json({
+      analysis,
+      usage: result?.usage ?? null
+    }, 200, {
       'Cache-Control': 'no-store'
     });
   } catch (error) {
-    console.error('Cloudflare AI analysis failed:', error);
+    console.error('Cloudflare Workers AI analysis failed:', error);
 
     const errorText = String(error?.message || error || '').toLowerCase();
 
-    if (errorText.includes('quota') || errorText.includes('usage limit')) {
+    if (errorText.includes('quota') || errorText.includes('usage limit') || errorText.includes('neurons')) {
       return json({
         code: 'AI_SERVICE_QUOTA_EXCEEDED',
         error: 'AI analysis is temporarily unavailable because the service usage limit has been reached.'
@@ -171,26 +178,6 @@ ${JSON.stringify(payload)}`;
       error: 'AI analysis is temporarily unavailable. Please try again later.'
     }, 502);
   }
-}
-
-function extractOutputText(response) {
-  if (typeof response?.output_text === 'string' && response.output_text) {
-    return response.output_text;
-  }
-
-  for (const item of response?.output || []) {
-    for (const content of item?.content || []) {
-      if (content?.type === 'output_text' && typeof content.text === 'string') {
-        return content.text;
-      }
-    }
-  }
-
-  if (typeof response?.response === 'string' && response.response) {
-    return response.response;
-  }
-
-  return null;
 }
 
 function validatePayload(payload) {

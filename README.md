@@ -133,16 +133,18 @@ FIT2CSV includes an optional **Analyze with AI** action. The FIT-to-CSV converte
 
 ### AI model
 
+This build uses Cloudflare's hosted OpenAI open-weight model and does not require an OpenAI API key.
+
 Workout analysis uses the OpenAI model available through Cloudflare AI:
 
 ```text
-openai/gpt-5.6-terra
+@cf/openai/gpt-oss-120b
 ```
 
 The Worker calls the model directly through the Cloudflare `AI` binding:
 
 ```js
-env.AI.run('openai/gpt-5.6-terra', ...)
+env.AI.run('@cf/openai/gpt-oss-120b', ...)
 ```
 
 No OpenAI API key is stored in the frontend, GitHub repository, or Worker secrets for this integration. A separate Workers AI REST API token is not required when the model is called from the Worker through `env.AI`.
