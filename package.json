@@ -1,5 +1,5 @@
 {
-  "name": "fit-csv-converter",
+  "name": "fit2csv",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "npm run build && wrangler deploy",
+    "dev:worker": "npm run build && wrangler dev"
   },
   "dependencies": {
     "fit-file-parser": "^4.1.0"

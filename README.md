@@ -125,3 +125,54 @@ After deployment, verify the domain in Google Search Console, submit `https://fi
 - `https://fit2csv.click/fit-to-csv-for-ai/`
 
 All three pages use unique metadata, canonical URLs, visible content, internal links, and are included in `public/sitemap.txt`.
+
+
+## Phase 2 — Optional AI Workout Analysis
+
+FIT2CSV now includes an optional **Analyze with AI** action powered by Cloudflare Workers AI. The FIT-to-CSV converter remains browser-only and unchanged.
+
+When the user explicitly clicks **Analyze with AI**:
+
+- The original FIT file is **not uploaded**.
+- The filename, GPS coordinates, and device serial number are excluded.
+- The browser creates a compact analysis payload from session metrics, laps, and aggregated record windows.
+- That compact JSON is sent to `POST /api/analyze`.
+- The Worker calls `@cf/meta/llama-3.3-70b-instruct-fp8-fast` through the `AI` binding and returns structured workout feedback.
+
+The AI module is intentionally separate from the Full CSV export. No AI-derived values are written into the CSV.
+
+### Cloudflare configuration
+
+`wrangler.jsonc` now includes both the static-assets binding and Workers AI binding:
+
+```jsonc
+{
+  "main": "src/worker.js",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "ai": {
+    "binding": "AI"
+  }
+}
+```
+
+For normal frontend-only development:
+
+```bash
+npm run dev
+```
+
+To test the Worker API locally (Workers AI usage may be billed by Cloudflare):
+
+```bash
+npm run dev:worker
+```
+
+Production deployment remains:
+
+```bash
+npm run deploy
+```

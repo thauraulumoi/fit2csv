@@ -17,6 +17,9 @@ const els = {
   sportBadge: $('sportBadge'),
   lapsBody: $('lapsBody'),
   downloadFullBtn: $('downloadFullBtn'),
+  analyzeAiBtn: $('analyzeAiBtn'),
+  aiStatus: $('aiStatus'),
+  aiResult: $('aiResult'),
 };
 
 let currentFile = null;
@@ -51,6 +54,8 @@ els.dropZone.addEventListener('drop', (event) => {
   if (file) handleFile(file);
 });
 
+els.analyzeAiBtn.addEventListener('click', analyzeWithAi);
+
 els.downloadFullBtn.addEventListener('click', () => {
   if (!exportData || !currentFile) return;
   downloadCsv(`${baseName(currentFile.name)}_full.csv`, exportData.rows, exportData.columns);
@@ -67,6 +72,7 @@ async function handleFile(file) {
   els.fileMeta.textContent = `${formatBytes(file.size)} • processed locally on this device`;
   els.fileRow.classList.remove('hidden');
   els.summarySection.classList.add('hidden');
+  resetAiPanel();
   showStatus('loading', 'Reading and decoding FIT data...');
 
   try {
@@ -292,6 +298,229 @@ function renderPreview(data) {
   els.summarySection.classList.remove('hidden');
 }
 
+async function analyzeWithAi() {
+  if (!parsedData) return;
+
+  const payload = buildAiAnalysisPayload(parsedData);
+  els.analyzeAiBtn.disabled = true;
+  els.aiResult.classList.add('hidden');
+  showAiStatus('loading', 'Analyzing compact workout metrics with Cloudflare Workers AI...');
+
+  try {
+    const response = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    let body = null;
+    try { body = await response.json(); } catch {}
+
+    if (!response.ok) {
+      throw new Error(body?.error || `AI request failed (${response.status}).`);
+    }
+
+    renderAiResult(body.analysis);
+    showAiStatus('success', 'AI analysis ready.');
+  } catch (error) {
+    console.error(error);
+    showAiStatus('error', String(error?.message || error));
+  } finally {
+    els.analyzeAiBtn.disabled = false;
+  }
+}
+
+function buildAiAnalysisPayload(data) {
+  const sessions = Array.isArray(data?.sessions) ? data.sessions : [];
+  const laps = Array.isArray(data?.laps) ? data.laps : [];
+  const records = Array.isArray(data?.records) ? data.records : [];
+  const session = sessions[0] ?? {};
+  const device = getPrimaryDeviceInfo(data);
+
+  return {
+    schema_version: 1,
+    source: {
+      sport: String(session.sport ?? data?.sport ?? 'activity'),
+      watch_model: device.displayName === '—' ? null : device.displayName,
+      privacy_note: 'No filename, serial number, GPS coordinates, or raw FIT file included.'
+    },
+    session: pickNumericFields(session, {
+      total_distance_m: ['total_distance'],
+      total_timer_time_s: ['total_timer_time'],
+      total_elapsed_time_s: ['total_elapsed_time'],
+      avg_speed_mps: ['enhanced_avg_speed', 'avg_speed'],
+      max_speed_mps: ['enhanced_max_speed', 'max_speed'],
+      avg_heart_rate_bpm: ['avg_heart_rate'],
+      max_heart_rate_bpm: ['max_heart_rate'],
+      avg_cadence_rpm: ['avg_cadence'],
+      max_cadence_rpm: ['max_cadence'],
+      avg_power_w: ['avg_power'],
+      max_power_w: ['max_power'],
+      total_ascent_m: ['total_ascent'],
+      total_descent_m: ['total_descent'],
+      total_calories_kcal: ['total_calories'],
+      avg_step_length: ['avg_step_length'],
+      avg_stance_time: ['avg_stance_time'],
+      avg_vertical_oscillation: ['avg_vertical_oscillation'],
+      avg_vertical_ratio: ['avg_vertical_ratio']
+    }),
+    laps: laps.slice(0, 40).map((lap, index) => ({
+      lap: index + 1,
+      ...pickNumericFields(lap, {
+        distance_m: ['total_distance'],
+        timer_time_s: ['total_timer_time'],
+        elapsed_time_s: ['total_elapsed_time'],
+        avg_speed_mps: ['enhanced_avg_speed', 'avg_speed'],
+        max_speed_mps: ['enhanced_max_speed', 'max_speed'],
+        avg_heart_rate_bpm: ['avg_heart_rate'],
+        max_heart_rate_bpm: ['max_heart_rate'],
+        avg_cadence_rpm: ['avg_cadence'],
+        avg_power_w: ['avg_power'],
+        max_power_w: ['max_power'],
+        total_ascent_m: ['total_ascent'],
+        total_descent_m: ['total_descent'],
+        avg_step_length: ['avg_step_length'],
+        avg_stance_time: ['avg_stance_time'],
+        avg_vertical_oscillation: ['avg_vertical_oscillation'],
+        avg_vertical_ratio: ['avg_vertical_ratio']
+      })
+    })),
+    windows: buildRecordWindows(records, 10),
+    record_count: records.length,
+  };
+}
+
+function pickNumericFields(source, mapping) {
+  const out = {};
+  for (const [target, candidates] of Object.entries(mapping)) {
+    for (const key of candidates) {
+      const value = finiteNumber(source?.[key]);
+      if (value !== null) {
+        out[target] = value;
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+function buildRecordWindows(records, targetCount) {
+  if (!records.length) return [];
+  const count = Math.min(targetCount, records.length);
+  const windows = [];
+
+  for (let i = 0; i < count; i += 1) {
+    const start = Math.floor((i * records.length) / count);
+    const end = Math.floor(((i + 1) * records.length) / count);
+    const slice = records.slice(start, Math.max(start + 1, end));
+
+    const firstDistance = firstFinite(slice, ['distance']);
+    const lastDistance = lastFinite(slice, ['distance']);
+
+    windows.push(compactObject({
+      window: i + 1,
+      start_distance_m: firstDistance,
+      end_distance_m: lastDistance,
+      avg_speed_mps: avgFinite(slice, ['enhanced_speed', 'speed']),
+      avg_heart_rate_bpm: avgFinite(slice, ['heart_rate']),
+      avg_cadence_rpm: avgFinite(slice, ['cadence']),
+      avg_power_w: avgFinite(slice, ['power']),
+      avg_altitude_m: avgFinite(slice, ['enhanced_altitude', 'altitude']),
+      avg_step_length: avgFinite(slice, ['step_length']),
+      avg_stance_time: avgFinite(slice, ['stance_time']),
+      avg_vertical_oscillation: avgFinite(slice, ['vertical_oscillation']),
+      avg_vertical_ratio: avgFinite(slice, ['vertical_ratio'])
+    }));
+  }
+
+  return windows;
+}
+
+function avgFinite(items, keys) {
+  let total = 0;
+  let count = 0;
+  for (const item of items) {
+    for (const key of keys) {
+      const n = finiteNumber(item?.[key]);
+      if (n !== null) { total += n; count += 1; break; }
+    }
+  }
+  return count ? Number((total / count).toFixed(4)) : null;
+}
+
+function firstFinite(items, keys) {
+  for (const item of items) {
+    for (const key of keys) {
+      const n = finiteNumber(item?.[key]);
+      if (n !== null) return n;
+    }
+  }
+  return null;
+}
+
+function lastFinite(items, keys) {
+  for (let i = items.length - 1; i >= 0; i -= 1) {
+    for (const key of keys) {
+      const n = finiteNumber(items[i]?.[key]);
+      if (n !== null) return n;
+    }
+  }
+  return null;
+}
+
+function compactObject(obj) {
+  return Object.fromEntries(Object.entries(obj).filter(([, value]) => value !== null && value !== undefined));
+}
+
+function renderAiResult(analysis) {
+  const positives = Array.isArray(analysis?.positives) ? analysis.positives : [];
+  const cautions = Array.isArray(analysis?.cautions) ? analysis.cautions : [];
+  const notes = Array.isArray(analysis?.data_notes) ? analysis.data_notes : [];
+
+  els.aiResult.innerHTML = `
+    <div class="ai-result-hero">
+      <span class="ai-kicker">WORKOUT ANALYSIS</span>
+      <h4>${escapeHtml(analysis?.headline || 'Activity analysis')}</h4>
+      <p>${escapeHtml(analysis?.overall_assessment || '—')}</p>
+    </div>
+    <div class="ai-analysis-grid">
+      ${aiTextCard('Pacing & Effort', analysis?.pacing_and_effort)}
+      ${aiTextCard('Heart Rate', analysis?.heart_rate)}
+      ${aiTextCard('Running Form', analysis?.running_form)}
+      ${aiTextCard('Next Session', analysis?.next_session)}
+    </div>
+    <div class="ai-list-grid">
+      ${aiListCard('What went well', positives)}
+      ${aiListCard('Watch-outs', cautions)}
+    </div>
+    ${notes.length ? `<div class="ai-data-notes"><strong>Data notes:</strong> ${notes.map(escapeHtml).join(' • ')}</div>` : ''}
+    <div class="ai-disclaimer">AI-generated workout analysis is informational and is not medical advice. FIT2CSV does not retain the original FIT file for this analysis.</div>
+  `;
+  els.aiResult.classList.remove('hidden');
+}
+
+function aiTextCard(title, text) {
+  return `<article class="ai-analysis-card"><h5>${escapeHtml(title)}</h5><p>${escapeHtml(text || 'Not enough data to assess.')}</p></article>`;
+}
+
+function aiListCard(title, items) {
+  const rows = items.length ? items.map((item) => `<li>${escapeHtml(item)}</li>`).join('') : '<li>No specific item identified from the available data.</li>';
+  return `<article class="ai-list-card"><h5>${escapeHtml(title)}</h5><ul>${rows}</ul></article>`;
+}
+
+function showAiStatus(type, message) {
+  els.aiStatus.className = `ai-status ${type}`;
+  els.aiStatus.textContent = message;
+}
+
+function resetAiPanel() {
+  if (!els.aiStatus || !els.aiResult || !els.analyzeAiBtn) return;
+  els.aiStatus.classList.add('hidden');
+  els.aiResult.classList.add('hidden');
+  els.aiResult.innerHTML = '';
+  els.analyzeAiBtn.disabled = false;
+}
+
 function reset() {
   currentFile = null;
   parsedData = null;
@@ -300,6 +529,7 @@ function reset() {
   els.fileRow.classList.add('hidden');
   els.summarySection.classList.add('hidden');
   els.status.classList.add('hidden');
+  resetAiPanel();
 }
 
 function showStatus(type, message) {

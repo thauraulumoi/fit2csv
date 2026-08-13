@@ -145,6 +145,25 @@
             <small>All decoded FIT messages and fields</small>
           </button>
         </div>
+
+        <div class="ai-panel card">
+          <div class="ai-panel-header">
+            <div>
+              <span class="eyebrow">OPTIONAL • CLOUDFLARE WORKERS AI</span>
+              <h3>AI Workout Analysis</h3>
+              <p>Get a concise analysis of pacing, heart rate, running form and a conservative next-session suggestion.</p>
+            </div>
+            <button id="analyzeAiBtn" class="ai-btn" type="button">
+              <span>Analyze with AI</span>
+              <small>Single activity analysis</small>
+            </button>
+          </div>
+          <div class="ai-privacy-note">
+            <strong>Privacy:</strong> Your FIT file stays in the browser. Only compact workout metrics are sent to Cloudflare Workers AI after you click Analyze. Filename, GPS coordinates and device serial number are excluded.
+          </div>
+          <div id="aiStatus" class="ai-status hidden" aria-live="polite"></div>
+          <div id="aiResult" class="ai-result hidden"></div>
+        </div>
       </section>
 
 
