@@ -324,7 +324,6 @@ async function analyzeWithAi() {
     if (!response.ok) {
       const ui = getAiUiText(language);
       const messages = {
-        DAILY_LIMIT_REACHED: ui.dailyLimit,
         AI_SERVICE_QUOTA_EXCEEDED: ui.serviceQuota,
         AI_SERVICE_BUSY: ui.serviceBusy,
         AI_SERVICE_UNAVAILABLE: ui.serviceUnavailable,

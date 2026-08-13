@@ -1,6 +1,5 @@
 const MODEL = 'openai/gpt-5.6-terra';
 const MAX_BODY_BYTES = 96 * 1024;
-const DAILY_LIMIT = 3;
 
 const LANGUAGE_NAMES = {
   en: 'English',
@@ -57,7 +56,7 @@ async function handleAnalyze(request, env) {
     return json({ error: 'Method not allowed.' }, 405, { Allow: 'POST' });
   }
 
-  if (!env.AI || !env.AI_LIMITER) {
+  if (!env.AI) {
     return json({
       code: 'AI_SERVICE_UNAVAILABLE',
       error: 'AI analysis is temporarily unavailable.'
@@ -77,9 +76,11 @@ async function handleAnalyze(request, env) {
   let payload;
   try {
     const raw = await request.text();
+
     if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
       return json({ error: 'Analysis payload is too large.' }, 413);
     }
+
     payload = JSON.parse(raw);
   } catch {
     return json({ error: 'Invalid JSON payload.' }, 400);
@@ -90,33 +91,6 @@ async function handleAnalyze(request, env) {
     return json({ error: validationError }, 400);
   }
 
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  if (!ip) {
-    return json({
-      code: 'AI_SERVICE_UNAVAILABLE',
-      error: 'AI analysis is temporarily unavailable.'
-    }, 503);
-  }
-
-  const ipHash = await sha256Hex(ip);
-  const limiterId = env.AI_LIMITER.idFromName(ipHash);
-  const limiter = env.AI_LIMITER.get(limiterId);
-
-  const claimResponse = await limiter.fetch('https://limiter/claim', { method: 'POST' });
-  const claim = await claimResponse.json();
-
-  if (!claim.allowed) {
-    return json({
-      code: 'DAILY_LIMIT_REACHED',
-      error: 'Daily AI analysis limit reached.',
-      limit: DAILY_LIMIT,
-      remaining: 0,
-      resets_at: claim.resets_at
-    }, 429, {
-      'Retry-After': String(claim.retry_after_seconds || secondsUntilNextUtcDay())
-    });
-  }
-
   const languageCode = String(payload.analysis_language || 'en').toLowerCase();
   const languageName = LANGUAGE_NAMES[languageCode] || LANGUAGE_NAMES.en;
 
@@ -124,15 +98,16 @@ async function handleAnalyze(request, env) {
 
 Rules:
 - Base every claim only on the supplied data. Never invent missing values.
-- This is workout analysis, not medical diagnosis. Do not diagnose disease, injury, arrhythmia, or other health conditions.
-- If heart-rate behavior looks unusual, describe the data pattern neutrally and suggest reducing effort or seeking professional advice only when appropriate; do not make a diagnosis.
-- Distinguish intentional workload increases from heart-rate drift. If speed or power also rises, do not label the HR rise as drift without evidence.
+- This is workout analysis, not medical diagnosis.
+- If heart-rate behavior looks unusual, describe the data pattern neutrally.
+- Distinguish intentional workload increases from heart-rate drift.
 - Use lap and window trends when available.
 - Comment on cadence, power, and running form only when those fields are present.
-- Keep the tone concise, practical, and coach-like. Avoid hype.
-- next_session must be a conservative general suggestion based only on this single workout; do not pretend to know the athlete's full training history.
+- Keep the tone concise, practical, and coach-like.
+- next_session must be a conservative general suggestion based only on this single workout.
 - data_notes should state important limitations or missing fields that affect confidence.
-- Write every human-facing string value in ${languageName}. Keep JSON property names exactly as defined by the schema.
+- Write every human-facing string value in ${languageName}.
+- Keep JSON property names exactly as defined by the schema.
 - Return only JSON matching the requested schema.`;
 
   const input = `Analyze this workout. Values retain the units shown in the JSON. The payload intentionally excludes filename, serial number, GPS coordinates, and raw second-by-second records.
@@ -143,9 +118,7 @@ ${JSON.stringify(payload)}`;
     const result = await env.AI.run(MODEL, {
       input,
       instructions,
-      reasoning: {
-        effort: 'low'
-      },
+      reasoning: { effort: 'low' },
       text: {
         format: {
           type: 'json_schema',
@@ -159,8 +132,8 @@ ${JSON.stringify(payload)}`;
     });
 
     const outputText = extractOutputText(result);
+
     if (!outputText) {
-      await refundClaim(limiter);
       throw new Error('AI returned no structured output.');
     }
 
@@ -168,21 +141,14 @@ ${JSON.stringify(payload)}`;
     try {
       analysis = JSON.parse(outputText);
     } catch {
-      await refundClaim(limiter);
       throw new Error('AI returned invalid structured output.');
     }
 
-    return json({
-      analysis,
-      remaining: Math.max(0, Number(claim.remaining ?? 0)),
-      limit: DAILY_LIMIT,
-      resets_at: claim.resets_at
-    }, 200, {
+    return json({ analysis }, 200, {
       'Cache-Control': 'no-store'
     });
   } catch (error) {
     console.error('Cloudflare AI analysis failed:', error);
-    await refundClaim(limiter);
 
     const errorText = String(error?.message || error || '').toLowerCase();
 
@@ -227,47 +193,31 @@ function extractOutputText(response) {
   return null;
 }
 
-async function refundClaim(limiter) {
-  try {
-    await limiter.fetch('https://limiter/refund', { method: 'POST' });
-  } catch (error) {
-    console.error('Failed to refund AI quota claim:', error);
-  }
-}
-
 function validatePayload(payload) {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return 'Workout payload is required.';
-  if (!payload.session || typeof payload.session !== 'object') return 'Session summary is required.';
-  if (!Array.isArray(payload.laps) || payload.laps.length > 40) return 'Invalid lap data.';
-  if (!Array.isArray(payload.windows) || payload.windows.length > 20) return 'Invalid record-window data.';
-  if (payload.analysis_language !== undefined && !LANGUAGE_NAMES[String(payload.analysis_language).toLowerCase()]) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return 'Workout payload is required.';
+  }
+
+  if (!payload.session || typeof payload.session !== 'object') {
+    return 'Session summary is required.';
+  }
+
+  if (!Array.isArray(payload.laps) || payload.laps.length > 40) {
+    return 'Invalid lap data.';
+  }
+
+  if (!Array.isArray(payload.windows) || payload.windows.length > 20) {
+    return 'Invalid record-window data.';
+  }
+
+  if (
+    payload.analysis_language !== undefined &&
+    !LANGUAGE_NAMES[String(payload.analysis_language).toLowerCase()]
+  ) {
     return 'Unsupported analysis language.';
   }
+
   return null;
-}
-
-async function sha256Hex(value) {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-function utcDateKey(now = new Date()) {
-  return now.toISOString().slice(0, 10);
-}
-
-function nextUtcDayIso(now = new Date()) {
-  const next = new Date(Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate() + 1,
-    0, 0, 0, 0
-  ));
-  return next.toISOString();
-}
-
-function secondsUntilNextUtcDay(now = new Date()) {
-  return Math.max(1, Math.ceil((Date.parse(nextUtcDayIso(now)) - now.getTime()) / 1000));
 }
 
 function json(body, status = 200, extraHeaders = {}) {
@@ -279,65 +229,4 @@ function json(body, status = 200, extraHeaders = {}) {
       ...extraHeaders
     }
   });
-}
-
-/**
- * One Durable Object instance is used per hashed client IP.
- * Each IP can successfully analyze at most 3 activities per UTC day.
- */
-export class AiDailyLimit {
-  constructor(state, env) {
-    this.state = state;
-    this.env = env;
-  }
-
-  async fetch(request) {
-    const url = new URL(request.url);
-
-    if (request.method !== 'POST') {
-      return Response.json({ error: 'Method not allowed.' }, { status: 405 });
-    }
-
-    const now = new Date();
-    const today = utcDateKey(now);
-    const resetsAt = nextUtcDayIso(now);
-
-    const stored = await this.state.storage.get('usage');
-    let usage = stored && stored.date === today
-      ? stored
-      : { date: today, count: 0 };
-
-    if (url.pathname === '/claim') {
-      if (usage.count >= DAILY_LIMIT) {
-        return Response.json({
-          allowed: false,
-          remaining: 0,
-          resets_at: resetsAt,
-          retry_after_seconds: secondsUntilNextUtcDay(now)
-        });
-      }
-
-      usage.count += 1;
-      await this.state.storage.put('usage', usage);
-
-      return Response.json({
-        allowed: true,
-        remaining: Math.max(0, DAILY_LIMIT - usage.count),
-        resets_at: resetsAt
-      });
-    }
-
-    if (url.pathname === '/refund') {
-      usage.count = Math.max(0, usage.count - 1);
-      await this.state.storage.put('usage', usage);
-
-      return Response.json({
-        ok: true,
-        remaining: Math.max(0, DAILY_LIMIT - usage.count),
-        resets_at: resetsAt
-      });
-    }
-
-    return Response.json({ error: 'Not found.' }, { status: 404 });
-  }
 }

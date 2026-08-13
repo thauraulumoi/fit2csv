@@ -12,21 +12,5 @@
   },
   "ai": {
     "binding": "AI"
-  },
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "AI_LIMITER",
-        "class_name": "AiDailyLimit"
-      }
-    ]
-  },
-  "migrations": [
-    {
-      "tag": "v1-ai-daily-limit",
-      "new_sqlite_classes": [
-        "AiDailyLimit"
-      ]
-    }
-  ]
+  }
 }

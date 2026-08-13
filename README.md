@@ -158,27 +158,13 @@ When a user explicitly clicks **Analyze with AI**:
 - The Worker sends the compact metrics to the configured AI model.
 - No AI-derived values are written into the downloaded Full CSV.
 
-### Daily usage limit
+### Usage limits
 
-AI analysis is limited to:
+This build does not enforce an application-level per-IP quota.
 
-```text
-3 successful analyses per IP address per UTC day
-```
+AI requests are still subject to the availability, rate limits, and account-level usage limits of the configured Cloudflare AI model.
 
-The limit is enforced with a SQLite-backed Cloudflare Durable Object. The client IP is SHA-256 hashed before it is used to select the Durable Object; the raw IP address is not written to application storage.
-
-If an AI request fails, the claimed analysis slot is refunded.
-
-A successful analysis response includes the number of remaining analyses for that IP. When the daily limit is reached, the API returns HTTP `429` with code:
-
-```text
-DAILY_LIMIT_REACHED
-```
-
-The frontend displays a localized message telling the user to try again the next day.
-
-> Note: IP-based limits can affect multiple people who share the same public IP, such as users behind a company network, carrier NAT, or VPN.
+FIT2CSV does not read, hash, log, or store client IP addresses for AI quota enforcement.
 
 ### Analysis languages
 
@@ -206,7 +192,7 @@ The analysis language selector supports:
 }
 ```
 
-and the SQLite-backed Durable Object used for the 3-per-IP daily quota.
+No Durable Object or per-IP quota is used for AI analysis in this build.
 
 Production deployment remains:
 
