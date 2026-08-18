@@ -18,6 +18,7 @@ const els = {
   lapsBody: $('lapsBody'),
   downloadFullBtn: $('downloadFullBtn'),
   copyCsvBtn: $('copyCsvBtn'),
+  shareCsvBtn: $('shareCsvBtn'),
   analyzeAiBtn: $('analyzeAiBtn'),
   aiLanguage: $('aiLanguage'),
   aiStatus: $('aiStatus'),
@@ -94,6 +95,8 @@ els.downloadFullBtn.addEventListener('click', () => {
 });
 
 els.copyCsvBtn.addEventListener('click', copyFullCsvToClipboard);
+els.shareCsvBtn?.addEventListener('click', shareFullCsv);
+configureCsvActions();
 
 async function handleFile(file) {
   if (!file.name.toLowerCase().endsWith('.fit')) {
@@ -757,6 +760,53 @@ function reset() {
 function showStatus(type, message) {
   els.status.className = `status ${type}`;
   els.status.textContent = message;
+}
+
+function configureCsvActions() {
+  if (!els.shareCsvBtn || !els.copyCsvBtn) return;
+
+  const mobileLike = window.matchMedia?.('(max-width: 760px)').matches ||
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  if (mobileLike && typeof navigator.share === 'function') {
+    els.shareCsvBtn.classList.remove('hidden');
+    els.copyCsvBtn.classList.add('hidden');
+  } else {
+    els.shareCsvBtn.classList.add('hidden');
+    els.copyCsvBtn.classList.remove('hidden');
+  }
+}
+
+async function shareFullCsv() {
+  if (!exportData || !currentFile) return;
+
+  const csv = toCsv(exportData.rows, exportData.columns);
+  const filename = `${baseName(currentFile.name)}_full.csv`;
+  const file = new File(['\uFEFF', csv], filename, { type: 'text/csv;charset=utf-8' });
+
+  if (typeof navigator.share !== 'function') {
+    showStatus('error', 'Sharing is not supported by this browser. Please use Download Full CSV instead.');
+    return;
+  }
+
+  const shareData = { files: [file], title: filename };
+  if (navigator.canShare && !navigator.canShare(shareData)) {
+    showStatus('error', 'This browser cannot share CSV files. Please use Download Full CSV instead.');
+    return;
+  }
+
+  els.shareCsvBtn.disabled = true;
+  try {
+    await navigator.share(shareData);
+    showStatus('success', `CSV ready to share: ${exportData.rows.length.toLocaleString('en-US')} decoded FIT messages.`);
+  } catch (error) {
+    if (error?.name !== 'AbortError') {
+      console.error('Share CSV failed:', error);
+      showStatus('error', 'Could not share the CSV file. Please use Download Full CSV instead.');
+    }
+  } finally {
+    els.shareCsvBtn.disabled = false;
+  }
 }
 
 async function copyFullCsvToClipboard() {
