@@ -54,9 +54,9 @@
         }
       }
     </script>
-    <script type="module" crossorigin src="/assets/main-Y0rFsPR3.js"></script>
-    <link rel="modulepreload" crossorigin href="/assets/style-CABCNkie.js">
-    <link rel="stylesheet" crossorigin href="/assets/style-DJ4xpuog.css">
+    <script type="module" crossorigin src="/assets/main-C4I00GyK.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/style-LIbn8AV0.js">
+    <link rel="stylesheet" crossorigin href="/assets/style-DVL-8zAS.css">
   </head>
   <body>
     <main class="page-shell">
@@ -78,7 +78,7 @@
           <div class="drop-icon">⇧</div>
           <div class="drop-copy">
             <div class="drop-title">Drop a .FIT file here</div>
-            <div class="drop-subtitle">or click to browse</div>
+            <div class="drop-subtitle">or click to browse • Ctrl+V to paste a copied FIT file</div>
           </div>
           <div class="drop-hint">Garmin • COROS • Polar • Suunto • FIT-compatible devices</div>
         </button>
@@ -143,10 +143,16 @@
               Original parser field names and decoded values are retained; no derived training metrics are added.
             </p>
           </div>
-          <button id="downloadFullBtn" class="primary-btn download-full-btn" type="button">
-            <span>Download Full CSV</span>
-            <small>All decoded FIT messages and fields</small>
-          </button>
+          <div class="csv-actions">
+            <button id="copyCsvBtn" class="secondary-btn copy-csv-btn" type="button">
+              <span>Copy CSV</span>
+              <small>Copy full CSV content</small>
+            </button>
+            <button id="downloadFullBtn" class="primary-btn download-full-btn" type="button">
+              <span>Download Full CSV</span>
+              <small>All decoded FIT messages and fields</small>
+            </button>
+          </div>
         </div>
 
         <div class="ai-panel card">

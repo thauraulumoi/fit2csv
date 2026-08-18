@@ -28,6 +28,9 @@ All remaining columns are field names found in the decoded FIT messages. Arrays 
 
 ## Features
 
+- Paste a copied `.fit` file with `Ctrl+V` when the browser receives the clipboard item as a real file
+- Copy the complete generated CSV text directly to the clipboard with **Copy CSV**
+
 - Drag and drop or select a `.fit` file
 - Parse locally with `fit-file-parser`
 - Show an English activity summary and lap/split preview in the browser
@@ -222,3 +225,10 @@ env.AI.run("@cf/openai/gpt-oss-120b", {
 ```
 
 The response parser checks `output_text`, Responses API `output[].content[].text`, and the legacy Workers AI `response` field for compatibility.
+
+
+### Clipboard behavior
+
+FIT2CSV listens for browser paste events. If the clipboard contains a real `.fit` file object, the file is processed exactly like drag-and-drop or file selection. Clipboard text that only contains a local filesystem path is not opened.
+
+**Copy CSV** copies the same full decoded CSV content used by **Download Full CSV**. It does not add, remove, rename, or calculate activity fields. Browser clipboard APIs reliably copy the CSV text; copying a virtual `.csv` file into the operating system's file clipboard is not consistently supported across browsers.

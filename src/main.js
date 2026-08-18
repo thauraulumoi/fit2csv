@@ -17,6 +17,7 @@ const els = {
   sportBadge: $('sportBadge'),
   lapsBody: $('lapsBody'),
   downloadFullBtn: $('downloadFullBtn'),
+  copyCsvBtn: $('copyCsvBtn'),
   analyzeAiBtn: $('analyzeAiBtn'),
   aiLanguage: $('aiLanguage'),
   aiStatus: $('aiStatus'),
@@ -55,12 +56,44 @@ els.dropZone.addEventListener('drop', (event) => {
   if (file) handleFile(file);
 });
 
+// Paste support: if the clipboard contains a real file object, accept the first .FIT file.
+// This works when the source app/OS places the copied file itself on the clipboard.
+// Plain-text filesystem paths are intentionally not opened because browsers cannot safely
+// access arbitrary local paths from clipboard text.
+document.addEventListener('paste', (event) => {
+  const clipboard = event.clipboardData;
+  if (!clipboard) return;
+
+  const candidates = [];
+
+  for (const file of Array.from(clipboard.files || [])) {
+    candidates.push(file);
+  }
+
+  for (const item of Array.from(clipboard.items || [])) {
+    if (item.kind !== 'file') continue;
+    const file = item.getAsFile?.();
+    if (file) candidates.push(file);
+  }
+
+  const fitFile = candidates.find((file) =>
+    String(file?.name || '').toLowerCase().endsWith('.fit')
+  );
+
+  if (!fitFile) return;
+
+  event.preventDefault();
+  handleFile(fitFile);
+});
+
 els.analyzeAiBtn.addEventListener('click', analyzeWithAi);
 
 els.downloadFullBtn.addEventListener('click', () => {
   if (!exportData || !currentFile) return;
   downloadCsv(`${baseName(currentFile.name)}_full.csv`, exportData.rows, exportData.columns);
 });
+
+els.copyCsvBtn.addEventListener('click', copyFullCsvToClipboard);
 
 async function handleFile(file) {
   if (!file.name.toLowerCase().endsWith('.fit')) {
@@ -724,6 +757,35 @@ function reset() {
 function showStatus(type, message) {
   els.status.className = `status ${type}`;
   els.status.textContent = message;
+}
+
+async function copyFullCsvToClipboard() {
+  if (!exportData) return;
+
+  const csv = toCsv(exportData.rows, exportData.columns);
+
+  if (!navigator.clipboard?.writeText) {
+    showStatus('error', 'Clipboard copy is not supported by this browser. Please use Download Full CSV instead.');
+    return;
+  }
+
+  els.copyCsvBtn.disabled = true;
+
+  try {
+    await navigator.clipboard.writeText(csv);
+    showStatus('success', `CSV copied to clipboard: ${exportData.rows.length.toLocaleString('en-US')} decoded FIT messages.`);
+    const original = els.copyCsvBtn.querySelector('span')?.textContent;
+    const label = els.copyCsvBtn.querySelector('span');
+    if (label) label.textContent = 'Copied!';
+    window.setTimeout(() => {
+      if (label) label.textContent = original || 'Copy CSV';
+    }, 1600);
+  } catch (error) {
+    console.error('Copy CSV failed:', error);
+    showStatus('error', 'Could not copy CSV to the clipboard. Please use Download Full CSV instead.');
+  } finally {
+    els.copyCsvBtn.disabled = false;
+  }
 }
 
 function downloadCsv(filename, rows, columns) {
